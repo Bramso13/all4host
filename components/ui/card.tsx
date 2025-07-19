@@ -1,82 +1,122 @@
-import * as React from 'react';
-import { Text, TextProps, View, ViewProps } from 'react-native';
-import { TextClassContext } from '~/components/ui/text';
-import { cn } from '~/lib/utils';
+import * as React from "react";
+import { Text, View, StyleProp, ViewStyle } from "react-native";
+import tw from "twrnc";
 
-function Card({
-  className,
-  ...props
-}: ViewProps & {
-  ref?: React.RefObject<View>;
-}) {
+interface CardProps {
+  children: React.ReactNode;
+  className?: string;
+  style?: StyleProp<ViewStyle>;
+}
+
+interface CardHeaderProps {
+  children: React.ReactNode;
+  className?: string;
+  style?: StyleProp<ViewStyle>;
+}
+
+interface CardTitleProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+interface CardDescriptionProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+interface CardContentProps {
+  children: React.ReactNode;
+  className?: string;
+  style?: StyleProp<ViewStyle>;
+}
+
+interface CardFooterProps {
+  children: React.ReactNode;
+  className?: string;
+  style?: StyleProp<ViewStyle>;
+}
+
+function Card({ children, className, style }: CardProps) {
   return (
     <View
-      className={cn(
-        'rounded-lg border border-border bg-card shadow-sm shadow-foreground/10',
-        className
-      )}
-      {...props}
-    />
+      style={[
+        tw`rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800`,
+        className ? tw`${className}` : tw``,
+        style,
+      ]}
+    >
+      {children}
+    </View>
   );
 }
 
-function CardHeader({
-  className,
-  ...props
-}: ViewProps & {
-  ref?: React.RefObject<View>;
-}) {
-  return <View className={cn('flex flex-col space-y-1.5 p-6', className)} {...props} />;
+function CardHeader({ children, className, style }: CardHeaderProps) {
+  return (
+    <View
+      style={[
+        tw`flex flex-col space-y-1.5 p-6`,
+        className ? tw`${className}` : tw``,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
 }
 
-function CardTitle({
-  className,
-  ...props
-}: TextProps & {
-  ref?: React.RefObject<Text>;
-}) {
+function CardTitle({ children, className }: CardTitleProps) {
   return (
     <Text
-      role='heading'
-      aria-level={3}
-      className={cn(
-        'text-2xl text-card-foreground font-semibold leading-none tracking-tight',
-        className
-      )}
-      {...props}
-    />
+      style={[
+        tw`text-2xl font-semibold leading-none tracking-tight text-black dark:text-white`,
+        className ? tw`${className}` : tw``,
+      ]}
+    >
+      {children}
+    </Text>
   );
 }
 
-function CardDescription({
-  className,
-  ...props
-}: TextProps & {
-  ref?: React.RefObject<Text>;
-}) {
-  return <Text className={cn('text-sm text-muted-foreground', className)} {...props} />;
-}
-
-function CardContent({
-  className,
-  ...props
-}: ViewProps & {
-  ref?: React.RefObject<View>;
-}) {
+function CardDescription({ children, className }: CardDescriptionProps) {
   return (
-    <TextClassContext.Provider value='text-card-foreground'>
-      <View className={cn('p-6 pt-0', className)} {...props} />
-    </TextClassContext.Provider>
+    <Text
+      style={[
+        tw`text-sm text-gray-600 dark:text-gray-400`,
+        className ? tw`${className}` : tw``,
+      ]}
+    >
+      {children}
+    </Text>
   );
 }
 
-function CardFooter({
-  className,
-  ...props
-}: ViewProps & {
-  ref?: React.RefObject<View>;
-}) {
-  return <View className={cn('flex flex-row items-center p-6 pt-0', className)} {...props} />;
+function CardContent({ children, className, style }: CardContentProps) {
+  return (
+    <View style={[tw`p-6 pt-0`, className ? tw`${className}` : tw``, style]}>
+      {children}
+    </View>
+  );
 }
 
-export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle };
+function CardFooter({ children, className, style }: CardFooterProps) {
+  return (
+    <View
+      style={[
+        tw`flex flex-row items-center p-6 pt-0`,
+        className ? tw`${className}` : tw``,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+export {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+};

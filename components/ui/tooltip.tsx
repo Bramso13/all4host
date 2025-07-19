@@ -1,44 +1,61 @@
-import * as TooltipPrimitive from '@rn-primitives/tooltip';
-import * as React from 'react';
-import { Platform, StyleSheet } from 'react-native';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { TextClassContext } from '~/components/ui/text';
-import { cn } from '~/lib/utils';
+import * as React from "react";
+import {
+  Platform,
+  StyleSheet,
+  View,
+  Text,
+  StyleProp,
+  ViewStyle,
+} from "react-native";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import tw from "twrnc";
 
-const Tooltip = TooltipPrimitive.Root;
+interface TooltipProps {
+  children: React.ReactNode;
+  content: string;
+  className?: string;
+  style?: StyleProp<ViewStyle>;
+}
 
-const TooltipTrigger = TooltipPrimitive.Trigger;
+interface TooltipContentProps {
+  children: React.ReactNode;
+  className?: string;
+  style?: StyleProp<ViewStyle>;
+}
 
-function TooltipContent({
-  className,
-  sideOffset = 4,
-  portalHost,
-  ...props
-}: TooltipPrimitive.ContentProps & {
-  ref?: React.RefObject<TooltipPrimitive.ContentRef>;
-  portalHost?: string;
-}) {
+const Tooltip = ({ children, content, className, style }: TooltipProps) => {
+  const [isVisible, setIsVisible] = React.useState(false);
+
   return (
-    <TooltipPrimitive.Portal hostName={portalHost}>
-      <TooltipPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
-        <Animated.View
-          entering={Platform.select({ web: undefined, default: FadeIn })}
-          exiting={Platform.select({ web: undefined, default: FadeOut })}
-        >
-          <TextClassContext.Provider value='text-sm native:text-base text-popover-foreground'>
-            <TooltipPrimitive.Content
-              sideOffset={sideOffset}
-              className={cn(
-                'z-50 overflow-hidden rounded-md border border-border bg-popover px-3 py-1.5 shadow-md shadow-foreground/5 web:animate-in web:fade-in-0 web:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
-                className
-              )}
-              {...props}
-            />
-          </TextClassContext.Provider>
-        </Animated.View>
-      </TooltipPrimitive.Overlay>
-    </TooltipPrimitive.Portal>
+    <View
+      style={[tw`relative`, className ? tw`${className}` : tw``, style]}
+      onTouchStart={() => setIsVisible(true)}
+      onTouchEnd={() => setIsVisible(false)}
+    >
+      {children}
+      {isVisible && <TooltipContent>{content}</TooltipContent>}
+    </View>
+  );
+};
+
+function TooltipContent({ children, className, style }: TooltipContentProps) {
+  return (
+    <Animated.View
+      entering={Platform.select({ web: undefined, default: FadeIn })}
+      exiting={Platform.select({ web: undefined, default: FadeOut })}
+      style={[
+        tw`absolute z-50 overflow-hidden rounded-md border border-gray-200 bg-white px-3 py-1.5 shadow-md dark:border-gray-700 dark:bg-gray-800`,
+        className ? tw`${className}` : tw``,
+        style,
+      ]}
+    >
+      <Text style={tw`text-sm text-black dark:text-white`}>{children}</Text>
+    </Animated.View>
   );
 }
+
+const TooltipTrigger = ({ children }: { children: React.ReactNode }) => {
+  return <>{children}</>;
+};
 
 export { Tooltip, TooltipContent, TooltipTrigger };
