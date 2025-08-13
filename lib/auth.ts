@@ -16,4 +16,14 @@ export const auth = betterAuth({
     enabled: true,
   },
   plugins: [expo()],
+  user: {
+    modelName: "User",
+    additionalFields: {
+      role: {
+        type: "string",
+        required: true,
+        defaultValue: "super_admin",
+      },
+    },
+  },
 });

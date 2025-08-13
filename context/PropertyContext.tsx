@@ -6,7 +6,7 @@ import React, {
   useCallback,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useSession } from "./SessionContext";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +34,8 @@ export interface ConciergerieManager {
   createdAt: string;
   updatedAt: string;
   properties?: Property[];
+  agents?: Agent[];
+  tasks?: Task[];
 }
 
 export interface Property {
@@ -149,10 +151,18 @@ export interface Task {
   name: string;
   description: string;
   type: "cleaning" | "laundry" | "maintenance";
+  status: "pending" | "in_progress" | "completed" | "cancelled";
+  priority: "low" | "medium" | "high" | "urgent";
+  dueDate?: string;
+  estimatedDuration?: number; // en minutes
   createdAt: string;
   updatedAt: string;
   conciergerieManagerId?: string;
   agentId?: string;
+  propertyId?: string;
+  assignedAt?: string;
+  completedAt?: string;
+  notes?: string;
 }
 
 // Types pour les opérations
@@ -175,6 +185,7 @@ export interface CreateAgentData {
   description: string;
   type: "cleaning" | "laundry" | "maintenance";
   userId: string;
+  email: string;
 }
 
 export interface UpdateAgentData {
@@ -193,11 +204,39 @@ export interface UpdatePropertyData {
   numberOfBathrooms?: number;
 }
 
+export interface CreateTaskData {
+  name: string;
+  description: string;
+  type: "cleaning" | "laundry" | "maintenance";
+  priority?: "low" | "medium" | "high" | "urgent";
+  dueDate?: string;
+  estimatedDuration?: number;
+  propertyId?: string;
+  agentId?: string;
+  notes?: string;
+}
+
+export interface UpdateTaskData {
+  name?: string;
+  description?: string;
+  type?: "cleaning" | "laundry" | "maintenance";
+  status?: "pending" | "in_progress" | "completed" | "cancelled";
+  priority?: "low" | "medium" | "high" | "urgent";
+  dueDate?: string;
+  estimatedDuration?: number;
+  propertyId?: string;
+  agentId?: string;
+  notes?: string;
+  assignedAt?: string;
+  completedAt?: string;
+}
+
 // État du contexte
 interface PropertyContextState {
   properties: Property[];
   conciergerieManager: ConciergerieManager | null;
   agents: Agent[];
+  tasks: Task[];
   isLoading: boolean;
   error: string | null;
   lastSync: Date | null;
@@ -226,8 +265,24 @@ interface PropertyContextActions {
   updateAgent: (id: string, data: UpdateAgentData) => Promise<Agent | null>;
   deleteAgent: (id: string) => Promise<boolean>;
   getAgent: (id: string) => Agent | undefined;
-  selectedProperty: Property | null;
+  setShowCreateAgentModal: (show: boolean) => void;
+  setShowAgentDetailsModal: (show: boolean) => void;
+  setSelectedAgent: (agent: Agent | null) => void;
 
+  // Opérations CRUD Task
+  createTask: (data: CreateTaskData) => Promise<Task | null>;
+  updateTask: (id: string, data: UpdateTaskData) => Promise<Task | null>;
+  deleteTask: (id: string) => Promise<boolean>;
+  getTask: (id: string) => Task | undefined;
+  assignTaskToAgent: (taskId: string, agentId: string) => Promise<boolean>;
+  completeTask: (taskId: string) => Promise<boolean>;
+  setShowCreateTaskModal: (show: boolean) => void;
+  setShowTaskDetailsModal: (show: boolean) => void;
+  setSelectedTask: (task: Task | null) => void;
+
+  // Propriété sélectionnée
+  selectedProperty: Property | null;
+  setSelectedProperty: (property: Property | null) => void;
   // Gestion des données
   loadProperties: () => Promise<void>;
   refreshProperties: () => Promise<void>;
@@ -238,6 +293,12 @@ interface PropertyContextActions {
   searchProperties: (query: string) => Property[];
   getAgentsByType: (type: Agent["type"]) => Agent[];
   searchAgents: (query: string) => Agent[];
+  getTasksByStatus: (status: Task["status"]) => Task[];
+  getTasksByType: (type: Task["type"]) => Task[];
+  getTasksByPriority: (priority: Task["priority"]) => Task[];
+  getTasksByAgent: (agentId: string) => Task[];
+  getTasksByProperty: (propertyId: string) => Task[];
+  searchTasks: (query: string) => Task[];
 
   // Statistiques
   getPropertiesStats: () => {
@@ -253,6 +314,17 @@ interface PropertyContextActions {
     laundry: number;
     maintenance: number;
   };
+  getTasksStats: () => {
+    total: number;
+    pending: number;
+    in_progress: number;
+    completed: number;
+    cancelled: number;
+    urgent: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
 }
 
 type PropertyContextType = PropertyContextState & PropertyContextActions;
@@ -262,6 +334,7 @@ const STORAGE_KEYS = {
   PROPERTIES: "properties_cache",
   CONCIERGERIE_MANAGER: "conciergerie_manager_cache",
   AGENTS: "agents_cache",
+  TASKS: "tasks_cache",
   LAST_SYNC: "properties_last_sync",
 };
 
@@ -272,12 +345,18 @@ const PropertyContext = createContext<PropertyContextType | null>(null);
 export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const sessionContext = useSession();
+  const { data: session } = authClient.useSession();
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(
     null
   );
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateManagerModal, setShowCreateManagerModal] = useState(false);
+  const [showCreateAgentModal, setShowCreateAgentModal] = useState(false);
+  const [showAgentDetailsModal, setShowAgentDetailsModal] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
+  const [showTaskDetailsModal, setShowTaskDetailsModal] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [createForm, setCreateForm] = useState({
     name: "",
     description: "",
@@ -290,8 +369,25 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({
   const [createManagerForm, setCreateManagerForm] = useState({
     name: "",
   });
+  const [createAgentForm, setCreateAgentForm] = useState({
+    name: "",
+    description: "",
+    type: "cleaning" as Agent["type"],
+    email: "",
+  });
+  const [createTaskForm, setCreateTaskForm] = useState({
+    name: "",
+    description: "",
+    type: "maintenance" as Task["type"],
+    priority: "medium" as Task["priority"],
+    dueDate: "",
+    estimatedDuration: "",
+    propertyId: "",
+    agentId: "",
+    notes: "",
+  });
 
-  const session = sessionContext?.session;
+  // const session = sessionContext?.session;
   const cookies = authClient.getCookie();
   const headers = {
     "Content-Type": "application/json",
@@ -301,6 +397,7 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({
     properties: [],
     conciergerieManager: null,
     agents: [],
+    tasks: [],
     isLoading: false,
     error: null,
     lastSync: null,
@@ -386,6 +483,81 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({
         numberOfBathrooms: "",
       });
       Alert.alert("Succès", "Propriété créée avec succès");
+    }
+  };
+
+  const handleCreateAgent = async () => {
+    if (!createAgentForm.name.trim() || !createAgentForm.description.trim()) {
+      Alert.alert("Erreur", "Le nom et la description sont obligatoires");
+      return;
+    }
+
+    if (!session?.user?.id) {
+      Alert.alert("Erreur", "Vous devez être connecté pour créer un agent");
+      return;
+    }
+
+    const agentData = {
+      name: createAgentForm.name.trim(),
+      description: createAgentForm.description.trim(),
+      type: createAgentForm.type,
+      userId: session.user.id,
+      email: createAgentForm.email.trim(),
+    };
+
+    const newAgent = await createAgent(agentData);
+    if (newAgent) {
+      setShowCreateAgentModal(false);
+      setCreateAgentForm({
+        name: "",
+        description: "",
+        type: "cleaning",
+        email: "",
+      });
+      Alert.alert("Succès", "Agent créé avec succès");
+    }
+  };
+
+  const handleCreateTask = async () => {
+    if (!createTaskForm.name.trim() || !createTaskForm.description.trim()) {
+      Alert.alert("Erreur", "Le nom et la description sont obligatoires");
+      return;
+    }
+
+    if (!session?.user?.id) {
+      Alert.alert("Erreur", "Vous devez être connecté pour créer une tâche");
+      return;
+    }
+
+    const taskData = {
+      name: createTaskForm.name.trim(),
+      description: createTaskForm.description.trim(),
+      type: createTaskForm.type,
+      priority: createTaskForm.priority,
+      dueDate: createTaskForm.dueDate || undefined,
+      estimatedDuration: createTaskForm.estimatedDuration
+        ? parseInt(createTaskForm.estimatedDuration)
+        : undefined,
+      propertyId: createTaskForm.propertyId || undefined,
+      agentId: createTaskForm.agentId || undefined,
+      notes: createTaskForm.notes.trim() || undefined,
+    };
+
+    const newTask = await createTask(taskData);
+    if (newTask) {
+      setShowCreateTaskModal(false);
+      setCreateTaskForm({
+        name: "",
+        description: "",
+        type: "maintenance",
+        priority: "medium",
+        dueDate: "",
+        estimatedDuration: "",
+        propertyId: "",
+        agentId: "",
+        notes: "",
+      });
+      Alert.alert("Succès", "Tâche créée avec succès");
     }
   };
 
@@ -570,6 +742,44 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [session?.user?.id, saveToStorage]);
 
+  // Charger les agents depuis l'API
+  const loadAgentsFromAPI = useCallback(async () => {
+    if (!session?.user?.id) return;
+
+    try {
+      const response = await fetch("http://localhost:8081/api/agents", {
+        method: "GET",
+        headers,
+      });
+
+      if (response.ok) {
+        const agents = await response.json();
+        setState((prev) => ({ ...prev, agents }));
+      }
+    } catch (error) {
+      console.error("Erreur API agents:", error);
+    }
+  }, [session?.user?.id]);
+
+  // Charger les tâches depuis l'API
+  const loadTasksFromAPI = useCallback(async () => {
+    if (!session?.user?.id) return;
+
+    try {
+      const response = await fetch("http://localhost:8081/api/tasks", {
+        method: "GET",
+        headers,
+      });
+
+      if (response.ok) {
+        const tasks = await response.json();
+        setState((prev) => ({ ...prev, tasks }));
+      }
+    } catch (error) {
+      console.error("Erreur API tasks:", error);
+    }
+  }, [session?.user?.id]);
+
   // Créer une propriété
   const createProperty = useCallback(
     async (data: CreatePropertyData): Promise<Property | null> => {
@@ -706,14 +916,29 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({
     // Toujours charger le manager depuis l'API
     await loadManagerFromAPI();
     await loadPropertiesFromAPI();
-  }, [loadFromStorage, loadManagerFromAPI, loadPropertiesFromAPI]);
+    await loadAgentsFromAPI();
+    await loadTasksFromAPI();
+  }, [
+    loadFromStorage,
+    loadManagerFromAPI,
+    loadPropertiesFromAPI,
+    loadAgentsFromAPI,
+    loadTasksFromAPI,
+  ]);
 
   // Rafraîchir les propriétés depuis l'API
   const refreshProperties = useCallback(async () => {
     // Toujours rafraîchir le manager depuis l'API
     await loadManagerFromAPI();
     await loadPropertiesFromAPI();
-  }, [loadManagerFromAPI, loadPropertiesFromAPI]);
+    await loadAgentsFromAPI();
+    await loadTasksFromAPI();
+  }, [
+    loadManagerFromAPI,
+    loadPropertiesFromAPI,
+    loadAgentsFromAPI,
+    loadTasksFromAPI,
+  ]);
 
   // Vider le cache
   const clearProperties = useCallback(async () => {
@@ -811,6 +1036,157 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     },
     [session?.user?.id]
+  );
+
+  // Créer une tâche
+  const createTask = useCallback(
+    async (data: CreateTaskData): Promise<Task | null> => {
+      if (!session?.user?.id) return null;
+
+      setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+      try {
+        const response = await fetch("http://localhost:8081/api/tasks", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(data),
+        });
+
+        if (response.ok) {
+          const newTask = await response.json();
+          setState((prev) => ({
+            ...prev,
+            tasks: [...prev.tasks, newTask],
+            isLoading: false,
+          }));
+          return newTask;
+        } else {
+          throw new Error("Erreur lors de la création de la tâche");
+        }
+      } catch (error) {
+        console.error("Erreur création tâche:", error);
+        setState((prev) => ({
+          ...prev,
+          error: error instanceof Error ? error.message : "Erreur inconnue",
+          isLoading: false,
+        }));
+        return null;
+      }
+    },
+    [session?.user?.id]
+  );
+
+  // Mettre à jour une tâche
+  const updateTask = useCallback(
+    async (id: string, data: UpdateTaskData): Promise<Task | null> => {
+      if (!session?.user?.id) return null;
+
+      setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+      try {
+        const response = await fetch(`http://localhost:8081/api/tasks/${id}`, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify(data),
+        });
+
+        if (response.ok) {
+          const updatedTask = await response.json();
+          setState((prev) => ({
+            ...prev,
+            tasks: prev.tasks.map((task) =>
+              task.id === id ? updatedTask : task
+            ),
+            isLoading: false,
+          }));
+          return updatedTask;
+        } else {
+          throw new Error("Erreur lors de la mise à jour de la tâche");
+        }
+      } catch (error) {
+        console.error("Erreur mise à jour tâche:", error);
+        setState((prev) => ({
+          ...prev,
+          error: error instanceof Error ? error.message : "Erreur inconnue",
+          isLoading: false,
+        }));
+        return null;
+      }
+    },
+    [session?.user?.id]
+  );
+
+  // Supprimer une tâche
+  const deleteTask = useCallback(
+    async (id: string): Promise<boolean> => {
+      if (!session?.user?.id) return false;
+
+      setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+      try {
+        const response = await fetch(`http://localhost:8081/api/tasks/${id}`, {
+          method: "DELETE",
+          headers,
+        });
+
+        if (response.ok) {
+          setState((prev) => ({
+            ...prev,
+            tasks: prev.tasks.filter((task) => task.id !== id),
+            isLoading: false,
+          }));
+          return true;
+        } else {
+          throw new Error("Erreur lors de la suppression de la tâche");
+        }
+      } catch (error) {
+        console.error("Erreur suppression tâche:", error);
+        setState((prev) => ({
+          ...prev,
+          error: error instanceof Error ? error.message : "Erreur inconnue",
+          isLoading: false,
+        }));
+        return false;
+      }
+    },
+    [session?.user?.id]
+  );
+
+  // Récupérer une tâche par ID
+  const getTask = useCallback(
+    (id: string): Task | undefined => {
+      return state.tasks.find((task) => task.id === id);
+    },
+    [state.tasks]
+  );
+
+  // Attribuer une tâche à un agent
+  const assignTaskToAgent = useCallback(
+    async (taskId: string, agentId: string): Promise<boolean> => {
+      const updateData: UpdateTaskData = {
+        agentId,
+        assignedAt: new Date().toISOString(),
+        status: "in_progress",
+      };
+
+      const result = await updateTask(taskId, updateData);
+      return result !== null;
+    },
+    [updateTask]
+  );
+
+  // Marquer une tâche comme terminée
+  const completeTask = useCallback(
+    async (taskId: string): Promise<boolean> => {
+      const updateData: UpdateTaskData = {
+        status: "completed",
+        completedAt: new Date().toISOString(),
+      };
+
+      const result = await updateTask(taskId, updateData);
+      return result !== null;
+    },
+    [updateTask]
   );
 
   // Mettre à jour un agent
@@ -929,24 +1305,90 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({
     return { total, cleaning, laundry, maintenance };
   }, [state.agents]);
 
-  // Charger les agents depuis l'API
-  const loadAgentsFromAPI = useCallback(async () => {
-    if (!session?.user?.id) return;
+  // Filtres pour les tâches
+  const getTasksByStatus = useCallback(
+    (status: Task["status"]) => {
+      return state.tasks.filter((task) => task.status === status);
+    },
+    [state.tasks]
+  );
 
-    try {
-      const response = await fetch("http://localhost:8081/api/agents", {
-        method: "GET",
-        headers,
-      });
+  const getTasksByType = useCallback(
+    (type: Task["type"]) => {
+      return state.tasks.filter((task) => task.type === type);
+    },
+    [state.tasks]
+  );
 
-      if (response.ok) {
-        const agents = await response.json();
-        setState((prev) => ({ ...prev, agents }));
-      }
-    } catch (error) {
-      console.error("Erreur API agents:", error);
-    }
-  }, [session?.user?.id]);
+  const getTasksByPriority = useCallback(
+    (priority: Task["priority"]) => {
+      return state.tasks.filter((task) => task.priority === priority);
+    },
+    [state.tasks]
+  );
+
+  const getTasksByAgent = useCallback(
+    (agentId: string) => {
+      return state.tasks.filter((task) => task.agentId === agentId);
+    },
+    [state.tasks]
+  );
+
+  const getTasksByProperty = useCallback(
+    (propertyId: string) => {
+      return state.tasks.filter((task) => task.propertyId === propertyId);
+    },
+    [state.tasks]
+  );
+
+  const searchTasks = useCallback(
+    (query: string) => {
+      const lowercaseQuery = query.toLowerCase();
+      return state.tasks.filter(
+        (task) =>
+          task.name.toLowerCase().includes(lowercaseQuery) ||
+          task.description.toLowerCase().includes(lowercaseQuery)
+      );
+    },
+    [state.tasks]
+  );
+
+  // Statistiques des tâches
+  const getTasksStats = useCallback(() => {
+    const total = state.tasks.length;
+    const pending = state.tasks.filter(
+      (task) => task.status === "pending"
+    ).length;
+    const in_progress = state.tasks.filter(
+      (task) => task.status === "in_progress"
+    ).length;
+    const completed = state.tasks.filter(
+      (task) => task.status === "completed"
+    ).length;
+    const cancelled = state.tasks.filter(
+      (task) => task.status === "cancelled"
+    ).length;
+    const urgent = state.tasks.filter(
+      (task) => task.priority === "urgent"
+    ).length;
+    const high = state.tasks.filter((task) => task.priority === "high").length;
+    const medium = state.tasks.filter(
+      (task) => task.priority === "medium"
+    ).length;
+    const low = state.tasks.filter((task) => task.priority === "low").length;
+
+    return {
+      total,
+      pending,
+      in_progress,
+      completed,
+      cancelled,
+      urgent,
+      high,
+      medium,
+      low,
+    };
+  }, [state.tasks]);
 
   // Charger les données au montage et quand la session change
   useEffect(() => {
@@ -965,7 +1407,11 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({
     updateAgent,
     deleteAgent,
     getAgent,
+    setShowCreateAgentModal,
+    setShowAgentDetailsModal,
+    setSelectedAgent,
     selectedProperty,
+    setSelectedProperty,
     // Actions ConciergerieManager
     createConciergerieManager,
     getConciergerieManager,
@@ -985,6 +1431,23 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({
     getAgentsByType,
     searchAgents,
     getAgentsStats,
+    // Actions Task
+    createTask,
+    updateTask,
+    deleteTask,
+    getTask,
+    assignTaskToAgent,
+    completeTask,
+    setShowCreateTaskModal,
+    setShowTaskDetailsModal,
+    setSelectedTask,
+    getTasksByStatus,
+    getTasksByType,
+    getTasksByPriority,
+    getTasksByAgent,
+    getTasksByProperty,
+    searchTasks,
+    getTasksStats,
   };
 
   return (
@@ -1047,6 +1510,397 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({
                 state.isLoading && styles.createButtonDisabled,
               ]}
               onPress={handleCreateManager}
+              disabled={state.isLoading}
+            >
+              <Text style={styles.createButtonText}>
+                {state.isLoading ? "Création..." : "Créer"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de création d'agent */}
+      <Modal
+        visible={showCreateAgentModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCreateAgentModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Créer un nouvel agent</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => {
+                setShowCreateAgentModal(false);
+                setCreateAgentForm({
+                  name: "",
+                  description: "",
+                  type: "cleaning",
+                  email: "",
+                });
+              }}
+            >
+              <Text style={styles.closeButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Nom *</Text>
+              <TextInput
+                style={styles.input}
+                value={createAgentForm.name}
+                onChangeText={(text) =>
+                  setCreateAgentForm((prev) => ({ ...prev, name: text }))
+                }
+                placeholder="Nom de l'agent"
+                placeholderTextColor="#8E8E93"
+              />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Email *</Text>
+              <TextInput
+                style={styles.input}
+                value={createAgentForm.email}
+                onChangeText={(text) =>
+                  setCreateAgentForm({ ...createAgentForm, email: text })
+                }
+                placeholder="Email de l'agent"
+                placeholderTextColor="#8E8E93"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Description *</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={createAgentForm.description}
+                onChangeText={(text) =>
+                  setCreateAgentForm((prev) => ({ ...prev, description: text }))
+                }
+                placeholder="Description de l'agent"
+                placeholderTextColor="#8E8E93"
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Type d'agent</Text>
+              <View style={styles.typeContainer}>
+                {(["cleaning", "laundry", "maintenance"] as const).map(
+                  (type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.typeButton,
+                        createAgentForm.type === type &&
+                          styles.typeButtonActive,
+                      ]}
+                      onPress={() =>
+                        setCreateAgentForm((prev) => ({ ...prev, type }))
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.typeButtonText,
+                          createAgentForm.type === type &&
+                            styles.typeButtonTextActive,
+                        ]}
+                      >
+                        {type === "cleaning" && "🧹 Nettoyage"}
+                        {type === "laundry" && "👕 Blanchisserie"}
+                        {type === "maintenance" && "🔧 Maintenance"}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                )}
+              </View>
+            </View>
+          </ScrollView>
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => {
+                setShowCreateAgentModal(false);
+                setCreateAgentForm({
+                  name: "",
+                  description: "",
+                  type: "cleaning",
+                  email: "",
+                });
+              }}
+            >
+              <Text style={styles.cancelButtonText}>Annuler</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.createButton,
+                state.isLoading && styles.createButtonDisabled,
+              ]}
+              onPress={handleCreateAgent}
+              disabled={state.isLoading}
+            >
+              <Text style={styles.createButtonText}>
+                {state.isLoading ? "Création..." : "Créer"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de création de tâche */}
+      <Modal
+        visible={showCreateTaskModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCreateTaskModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Créer une nouvelle tâche</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => {
+                setShowCreateTaskModal(false);
+                setCreateTaskForm({
+                  name: "",
+                  description: "",
+                  type: "maintenance",
+                  priority: "medium",
+                  dueDate: "",
+                  estimatedDuration: "",
+                  propertyId: "",
+                  agentId: "",
+                  notes: "",
+                });
+              }}
+            >
+              <Text style={styles.closeButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Nom *</Text>
+              <TextInput
+                style={styles.input}
+                value={createTaskForm.name}
+                onChangeText={(text) =>
+                  setCreateTaskForm((prev) => ({ ...prev, name: text }))
+                }
+                placeholder="Nom de la tâche"
+                placeholderTextColor="#8E8E93"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Description *</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={createTaskForm.description}
+                onChangeText={(text) =>
+                  setCreateTaskForm((prev) => ({ ...prev, description: text }))
+                }
+                placeholder="Description de la tâche"
+                placeholderTextColor="#8E8E93"
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Type de tâche</Text>
+              <View style={styles.typeContainer}>
+                {(["cleaning", "laundry", "maintenance"] as const).map(
+                  (type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.typeButton,
+                        createTaskForm.type === type && styles.typeButtonActive,
+                      ]}
+                      onPress={() =>
+                        setCreateTaskForm((prev) => ({ ...prev, type }))
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.typeButtonText,
+                          createTaskForm.type === type &&
+                            styles.typeButtonTextActive,
+                        ]}
+                      >
+                        {type === "cleaning" && "🧹 Nettoyage"}
+                        {type === "laundry" && "👕 Blanchisserie"}
+                        {type === "maintenance" && "🔧 Maintenance"}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                )}
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Priorité</Text>
+              <View style={styles.typeContainer}>
+                {(["low", "medium", "high", "urgent"] as const).map(
+                  (priority) => (
+                    <TouchableOpacity
+                      key={priority}
+                      style={[
+                        styles.typeButton,
+                        createTaskForm.priority === priority &&
+                          styles.typeButtonActive,
+                      ]}
+                      onPress={() =>
+                        setCreateTaskForm((prev) => ({ ...prev, priority }))
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.typeButtonText,
+                          createTaskForm.priority === priority &&
+                            styles.typeButtonTextActive,
+                        ]}
+                      >
+                        {priority === "low" && "🟢 Faible"}
+                        {priority === "medium" && "🟡 Moyenne"}
+                        {priority === "high" && "🟠 Élevée"}
+                        {priority === "urgent" && "🔴 Urgente"}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                )}
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Date d'échéance</Text>
+              <TextInput
+                style={styles.input}
+                value={createTaskForm.dueDate}
+                onChangeText={(text) =>
+                  setCreateTaskForm((prev) => ({ ...prev, dueDate: text }))
+                }
+                placeholder="YYYY-MM-DD (optionnel)"
+                placeholderTextColor="#8E8E93"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Durée estimée (minutes)</Text>
+              <TextInput
+                style={styles.input}
+                value={createTaskForm.estimatedDuration}
+                onChangeText={(text) =>
+                  setCreateTaskForm((prev) => ({
+                    ...prev,
+                    estimatedDuration: text,
+                  }))
+                }
+                placeholder="120 (optionnel)"
+                placeholderTextColor="#8E8E93"
+                keyboardType="numeric"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Propriété (optionnel)</Text>
+              <View style={styles.dropdownContainer}>
+                <TouchableOpacity
+                  style={styles.dropdownTrigger}
+                  onPress={() => {
+                    // TODO: Ouvrir sélecteur de propriété
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>
+                    {createTaskForm.propertyId
+                      ? state.properties.find(
+                          (p: Property) => p.id === createTaskForm.propertyId
+                        )?.name
+                      : "Sélectionner une propriété"}
+                  </Text>
+                  <Text style={styles.dropdownItemText}>▼</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Agent assigné (optionnel)</Text>
+              <View style={styles.dropdownContainer}>
+                <TouchableOpacity
+                  style={styles.dropdownTrigger}
+                  onPress={() => {
+                    // TODO: Ouvrir sélecteur d'agent
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>
+                    {createTaskForm.agentId
+                      ? state.agents.find(
+                          (a: Agent) => a.id === createTaskForm.agentId
+                        )?.name
+                      : "Sélectionner un agent"}
+                  </Text>
+                  <Text style={styles.dropdownItemText}>▼</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Notes (optionnel)</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={createTaskForm.notes}
+                onChangeText={(text) =>
+                  setCreateTaskForm((prev) => ({ ...prev, notes: text }))
+                }
+                placeholder="Notes supplémentaires"
+                placeholderTextColor="#8E8E93"
+                multiline
+                numberOfLines={2}
+                textAlignVertical="top"
+              />
+            </View>
+          </ScrollView>
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => {
+                setShowCreateTaskModal(false);
+                setCreateTaskForm({
+                  name: "",
+                  description: "",
+                  type: "maintenance",
+                  priority: "medium",
+                  dueDate: "",
+                  estimatedDuration: "",
+                  propertyId: "",
+                  agentId: "",
+                  notes: "",
+                });
+              }}
+            >
+              <Text style={styles.cancelButtonText}>Annuler</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.createButton,
+                state.isLoading && styles.createButtonDisabled,
+              ]}
+              onPress={handleCreateTask}
               disabled={state.isLoading}
             >
               <Text style={styles.createButtonText}>
@@ -1289,58 +2143,7 @@ export const PropertyDropdown: React.FC<{
     }
   };
 
-  return (
-    <View style={styles.dropdownContainer}>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <TouchableOpacity style={styles.dropdownTrigger}>
-            <Text style={styles.dropdownTriggerText}>
-              {selectedProperty
-                ? selectedProperty.name
-                : "Sélectionner un bien"}
-            </Text>
-            <Text style={styles.dropdownArrow}>▼</Text>
-          </TouchableOpacity>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent style={styles.dropdownContent}>
-          {properties && properties.length > 0 ? (
-            properties.map((property) => (
-              <DropdownMenuItem
-                key={property.id}
-                onPress={() => onPropertySelect(property)}
-                style={styles.dropdownContentItem}
-              >
-                <Text style={styles.dropdownItemText}>{property.name}</Text>
-                <View
-                  style={[
-                    styles.statusIndicator,
-                    { backgroundColor: getStatusColor(property.status) },
-                  ]}
-                />
-              </DropdownMenuItem>
-            ))
-          ) : (
-            <DropdownMenuItem style={styles.dropdownContentItem}>
-              <Text style={styles.dropdownItemText}>Aucun bien trouvé</Text>
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem>
-            <TouchableOpacity
-              style={styles.dropdownTrigger}
-              onPress={() => {
-                console.log("onAddProperty");
-                onAddProperty();
-              }}
-            >
-              <Text style={styles.dropdownTriggerText}>➕ Ajouter un bien</Text>
-              <Text style={styles.dropdownArrow}>+</Text>
-            </TouchableOpacity>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </View>
-  );
+  return <View style={styles.dropdownContainer}></View>;
 };
 
 const styles = StyleSheet.create({
@@ -1491,6 +2294,31 @@ const styles = StyleSheet.create({
     color: "#8E8E93",
   },
   statusButtonTextActive: {
+    color: "#FFFFFF",
+  },
+  typeContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  typeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#F2F2F7",
+    borderWidth: 1,
+    borderColor: "#E5E5E7",
+  },
+  typeButtonActive: {
+    backgroundColor: "#007AFF",
+    borderColor: "#007AFF",
+  },
+  typeButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#8E8E93",
+  },
+  typeButtonTextActive: {
     color: "#FFFFFF",
   },
   row: {

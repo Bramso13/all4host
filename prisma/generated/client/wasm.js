@@ -20,12 +20,12 @@ exports.Prisma = Prisma
 exports.$Enums = {}
 
 /**
- * Prisma Client JS version: 6.12.0
- * Query Engine version: 8047c96bbd92db98a2abc7c9323ce77c02c89dbc
+ * Prisma Client JS version: 6.14.0
+ * Query Engine version: 717184b7b35ea05dfa71a3236b7af656013e1e49
  */
 Prisma.prismaVersion = {
-  client: "6.12.0",
-  engine: "8047c96bbd92db98a2abc7c9323ce77c02c89dbc"
+  client: "6.14.0",
+  engine: "717184b7b35ea05dfa71a3236b7af656013e1e49"
 }
 
 Prisma.PrismaClientKnownRequestError = () => {
@@ -122,30 +122,128 @@ exports.Prisma.TransactionIsolationLevel = makeStrictEnum({
 
 exports.Prisma.UserScalarFieldEnum = {
   id: 'id',
-  role: 'role',
-  name: 'name',
   email: 'email',
+  password: 'password',
+  name: 'name',
+  firstName: 'firstName',
+  lastName: 'lastName',
+  phone: 'phone',
+  avatar: 'avatar',
+  role: 'role',
+  status: 'status',
+  language: 'language',
+  timezone: 'timezone',
   emailVerified: 'emailVerified',
-  image: 'image',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-};
-
-exports.Prisma.ConciergerieManagerScalarFieldEnum = {
-  id: 'id',
-  name: 'name',
-  userId: 'userId',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-};
-
-exports.Prisma.TaskScalarFieldEnum = {
-  id: 'id',
-  name: 'name',
-  description: 'description',
+  phoneVerified: 'phoneVerified',
+  lastLoginAt: 'lastLoginAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
-  conciergerieManagerId: 'conciergerieManagerId',
+  deletedAt: 'deletedAt'
+};
+
+exports.Prisma.SuperAdminProfileScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  companyName: 'companyName',
+  businessNumber: 'businessNumber',
+  vatNumber: 'vatNumber',
+  billingAddress: 'billingAddress',
+  billingCity: 'billingCity',
+  billingCountry: 'billingCountry',
+  billingPostal: 'billingPostal',
+  subscriptionTier: 'subscriptionTier',
+  subscriptionStatus: 'subscriptionStatus',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.PoleSubscriptionScalarFieldEnum = {
+  id: 'id',
+  poleType: 'poleType',
+  status: 'status',
+  startDate: 'startDate',
+  endDate: 'endDate',
+  trialEndDate: 'trialEndDate',
+  monthlyPrice: 'monthlyPrice',
+  lastBillingDate: 'lastBillingDate',
+  nextBillingDate: 'nextBillingDate',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  superAdminId: 'superAdminId'
+};
+
+exports.Prisma.PoleManagerProfileScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  poleTypes: 'poleTypes',
+  canViewAnalytics: 'canViewAnalytics',
+  canManageAgents: 'canManageAgents',
+  canManageClients: 'canManageClients',
+  canManageBilling: 'canManageBilling',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  superAdminId: 'superAdminId'
+};
+
+exports.Prisma.PropertyOwnerProfileScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  company: 'company',
+  taxNumber: 'taxNumber',
+  address: 'address',
+  city: 'city',
+  country: 'country',
+  postal: 'postal',
+  preferredContactMethod: 'preferredContactMethod',
+  receiveNotifications: 'receiveNotifications',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.LaundryClientProfileScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  companyName: 'companyName',
+  contactPerson: 'contactPerson',
+  defaultPickupAddress: 'defaultPickupAddress',
+  defaultDeliveryAddress: 'defaultDeliveryAddress',
+  preferredPickupTime: 'preferredPickupTime',
+  specialInstructions: 'specialInstructions',
+  creditLimit: 'creditLimit',
+  paymentTerms: 'paymentTerms',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.AgentProfileScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  agentType: 'agentType',
+  availability: 'availability',
+  employeeId: 'employeeId',
+  certifications: 'certifications',
+  currentLocation: 'currentLocation',
+  serviceZones: 'serviceZones',
+  rating: 'rating',
+  completedTasks: 'completedTasks',
+  averageRating: 'averageRating',
+  responseTime: 'responseTime',
+  workingHours: 'workingHours',
+  availabilityCalendar: 'availabilityCalendar',
+  hourlyRate: 'hourlyRate',
+  isActive: 'isActive',
+  hireDate: 'hireDate',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  managerId: 'managerId'
+};
+
+exports.Prisma.AgentSpecialtyScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  category: 'category',
+  level: 'level',
+  certified: 'certified',
   agentId: 'agentId'
 };
 
@@ -154,245 +252,252 @@ exports.Prisma.PropertyScalarFieldEnum = {
   name: 'name',
   description: 'description',
   status: 'status',
-  location: 'location',
+  address: 'address',
+  city: 'city',
+  country: 'country',
+  postalCode: 'postalCode',
+  latitude: 'latitude',
+  longitude: 'longitude',
   surface: 'surface',
   numberOfRooms: 'numberOfRooms',
+  numberOfBedrooms: 'numberOfBedrooms',
   numberOfBathrooms: 'numberOfBathrooms',
+  maxGuests: 'maxGuests',
+  floor: 'floor',
+  hasElevator: 'hasElevator',
+  hasParking: 'hasParking',
+  hasBalcony: 'hasBalcony',
+  pricePerNight: 'pricePerNight',
+  cleaningFee: 'cleaningFee',
+  serviceFee: 'serviceFee',
+  securityDeposit: 'securityDeposit',
+  averageRating: 'averageRating',
+  totalReviews: 'totalReviews',
+  checkInTime: 'checkInTime',
+  checkOutTime: 'checkOutTime',
+  cancellationPolicy: 'cancellationPolicy',
+  houseRules: 'houseRules',
+  accessInstructions: 'accessInstructions',
+  cleaningInstructions: 'cleaningInstructions',
+  maintenanceNotes: 'maintenanceNotes',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
-  conciergerieManagerId: 'conciergerieManagerId'
+  ownerId: 'ownerId',
+  managerId: 'managerId'
 };
 
-exports.Prisma.ReservationScalarFieldEnum = {
-  id: 'id',
-  propertyId: 'propertyId',
-  startDate: 'startDate',
-  endDate: 'endDate',
-  client: 'client',
-  notes: 'notes',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-};
-
-exports.Prisma.AgentScalarFieldEnum = {
+exports.Prisma.PropertyFeatureScalarFieldEnum = {
   id: 'id',
   name: 'name',
-  description: 'description',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt',
-  type: 'type',
-  conciergerieManagerId: 'conciergerieManagerId',
-  userId: 'userId',
-  cleaningManagerId: 'cleaningManagerId'
-};
-
-exports.Prisma.MaintenanceSessionScalarFieldEnum = {
-  id: 'id',
-  propertyId: 'propertyId',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt',
-  maintenanceId: 'maintenanceId',
-  agentId: 'agentId',
-  startDate: 'startDate',
-  endDate: 'endDate',
-  notes: 'notes'
-};
-
-exports.Prisma.MaintenanceScalarFieldEnum = {
-  id: 'id',
-  name: 'name',
-  description: 'description',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-};
-
-exports.Prisma.CleaningSessionScalarFieldEnum = {
-  id: 'id',
-  propertyId: 'propertyId',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt',
-  cleaningId: 'cleaningId',
-  agentId: 'agentId',
-  startDate: 'startDate',
-  endDate: 'endDate',
-  duration: 'duration',
-  notes: 'notes'
-};
-
-exports.Prisma.CleaningScalarFieldEnum = {
-  id: 'id',
-  name: 'name',
-  description: 'description',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-};
-
-exports.Prisma.CleaningManagerScalarFieldEnum = {
-  id: 'id',
-  userId: 'userId',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-};
-
-exports.Prisma.InterventionSiteScalarFieldEnum = {
-  id: 'id',
-  name: 'name',
-  description: 'description',
-  client: 'client',
-  site: 'site',
-  surface: 'surface',
-  type: 'type',
-  address: 'address',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt',
-  cleaningManagerId: 'cleaningManagerId'
-};
-
-exports.Prisma.SiteCleaningSessionScalarFieldEnum = {
-  id: 'id',
-  interventionSiteId: 'interventionSiteId',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt',
-  cleaningManagerId: 'cleaningManagerId',
-  startDate: 'startDate',
-  endDate: 'endDate',
-  duration: 'duration',
-  notes: 'notes',
-  status: 'status',
-  laundryManagerId: 'laundryManagerId',
-  cleaningAgentId: 'cleaningAgentId'
-};
-
-exports.Prisma.LaundryManagerScalarFieldEnum = {
-  id: 'id',
-  userId: 'userId',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-};
-
-exports.Prisma.ProductScalarFieldEnum = {
-  id: 'id',
-  name: 'name',
-  description: 'description',
-  price: 'price',
-  stock: 'stock',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt',
-  laundryManagerId: 'laundryManagerId'
-};
-
-exports.Prisma.OrderScalarFieldEnum = {
-  id: 'id',
-  name: 'name',
-  description: 'description',
-  status: 'status',
-  receivedDate: 'receivedDate',
-  deliveryDate: 'deliveryDate',
-  client: 'client',
-  address: 'address',
-  phone: 'phone',
-  total: 'total',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt',
-  laundryManagerId: 'laundryManagerId'
-};
-
-exports.Prisma.TicketScalarFieldEnum = {
-  id: 'id',
-  title: 'title',
-  description: 'description',
-  status: 'status',
-  priority: 'priority',
-  propertyId: 'propertyId',
-  agentId: 'agentId',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-};
-
-exports.Prisma.PaymentScalarFieldEnum = {
-  id: 'id',
-  amount: 'amount',
-  currency: 'currency',
-  method: 'method',
-  status: 'status',
-  propertyId: 'propertyId',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  icon: 'icon',
+  category: 'category',
+  propertyId: 'propertyId'
 };
 
 exports.Prisma.PropertyPhotoScalarFieldEnum = {
   id: 'id',
   url: 'url',
+  caption: 'caption',
+  isMain: 'isMain',
+  order: 'order',
   type: 'type',
   propertyId: 'propertyId',
   createdAt: 'createdAt'
 };
 
-exports.Prisma.CleaningPhotoScalarFieldEnum = {
+exports.Prisma.PropertyReviewScalarFieldEnum = {
   id: 'id',
-  url: 'url',
-  type: 'type',
-  cleaningSessionId: 'cleaningSessionId',
+  rating: 'rating',
+  comment: 'comment',
+  guestName: 'guestName',
+  guestEmail: 'guestEmail',
+  propertyId: 'propertyId',
   createdAt: 'createdAt'
 };
 
-exports.Prisma.MaintenancePhotoScalarFieldEnum = {
+exports.Prisma.ReservationScalarFieldEnum = {
   id: 'id',
-  url: 'url',
-  type: 'type',
-  maintenanceSessionId: 'maintenanceSessionId',
-  createdAt: 'createdAt'
+  propertyId: 'propertyId',
+  guestName: 'guestName',
+  guestEmail: 'guestEmail',
+  guestPhone: 'guestPhone',
+  guestCount: 'guestCount',
+  checkIn: 'checkIn',
+  checkOut: 'checkOut',
+  nights: 'nights',
+  basePrice: 'basePrice',
+  cleaningFee: 'cleaningFee',
+  serviceFee: 'serviceFee',
+  taxes: 'taxes',
+  totalPrice: 'totalPrice',
+  status: 'status',
+  notes: 'notes',
+  confirmationCode: 'confirmationCode',
+  bookingSource: 'bookingSource',
+  checkInTime: 'checkInTime',
+  checkOutTime: 'checkOutTime',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  managerId: 'managerId'
 };
 
-exports.Prisma.SiteCleaningPhotoScalarFieldEnum = {
+exports.Prisma.CleaningSessionScalarFieldEnum = {
   id: 'id',
-  url: 'url',
-  type: 'type',
-  siteCleaningSessionId: 'siteCleaningSessionId',
-  createdAt: 'createdAt'
-};
-
-exports.Prisma.TicketPhotoScalarFieldEnum = {
-  id: 'id',
-  url: 'url',
-  ticketId: 'ticketId',
-  createdAt: 'createdAt'
+  propertyId: 'propertyId',
+  agentId: 'agentId',
+  scheduledDate: 'scheduledDate',
+  startTime: 'startTime',
+  endTime: 'endTime',
+  duration: 'duration',
+  cleaningType: 'cleaningType',
+  status: 'status',
+  notes: 'notes',
+  agentNotes: 'agentNotes',
+  ownerRating: 'ownerRating',
+  managerRating: 'managerRating',
+  feedback: 'feedback',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  managerId: 'managerId'
 };
 
 exports.Prisma.CleaningChecklistScalarFieldEnum = {
   id: 'id',
   item: 'item',
   completed: 'completed',
+  notes: 'notes',
+  order: 'order',
+  cleaningSessionId: 'cleaningSessionId'
+};
+
+exports.Prisma.CleaningPhotoScalarFieldEnum = {
+  id: 'id',
+  url: 'url',
+  type: 'type',
+  caption: 'caption',
   cleaningSessionId: 'cleaningSessionId',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  createdAt: 'createdAt'
 };
 
-exports.Prisma.SiteCleaningChecklistScalarFieldEnum = {
+exports.Prisma.TicketScalarFieldEnum = {
   id: 'id',
-  item: 'item',
-  completed: 'completed',
-  siteCleaningSessionId: 'siteCleaningSessionId',
+  ticketNumber: 'ticketNumber',
+  title: 'title',
+  description: 'description',
+  status: 'status',
+  priority: 'priority',
+  propertyId: 'propertyId',
+  reportedBy: 'reportedBy',
+  reportedAt: 'reportedAt',
+  agentId: 'agentId',
+  assignedAt: 'assignedAt',
+  category: 'category',
+  issueType: 'issueType',
+  roomLocation: 'roomLocation',
+  resolution: 'resolution',
+  resolvedAt: 'resolvedAt',
+  estimatedCost: 'estimatedCost',
+  estimatedDuration: 'estimatedDuration',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  managerId: 'managerId'
 };
 
-exports.Prisma.CleaningPlanningScalarFieldEnum = {
+exports.Prisma.TicketPhotoScalarFieldEnum = {
   id: 'id',
-  date: 'date',
+  url: 'url',
+  caption: 'caption',
+  ticketId: 'ticketId',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.MaintenanceSessionScalarFieldEnum = {
+  id: 'id',
+  sessionNumber: 'sessionNumber',
+  ticketId: 'ticketId',
+  propertyId: 'propertyId',
+  agentId: 'agentId',
+  scheduledDate: 'scheduledDate',
   startTime: 'startTime',
   endTime: 'endTime',
-  interventionSiteId: 'interventionSiteId',
-  cleaningManagerId: 'cleaningManagerId',
-  agentId: 'agentId',
+  estimatedDuration: 'estimatedDuration',
+  actualDuration: 'actualDuration',
+  status: 'status',
+  notes: 'notes',
+  workDescription: 'workDescription',
+  agentNotes: 'agentNotes',
+  laborCost: 'laborCost',
+  materialsCost: 'materialsCost',
+  totalCost: 'totalCost',
+  ownerApproval: 'ownerApproval',
+  managerApproval: 'managerApproval',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  managerId: 'managerId'
+};
+
+exports.Prisma.MaintenanceMaterialScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  quantity: 'quantity',
+  unit: 'unit',
+  unitPrice: 'unitPrice',
+  totalPrice: 'totalPrice',
+  supplier: 'supplier',
+  maintenanceSessionId: 'maintenanceSessionId'
+};
+
+exports.Prisma.MaintenancePhotoScalarFieldEnum = {
+  id: 'id',
+  url: 'url',
+  type: 'type',
+  caption: 'caption',
+  maintenanceSessionId: 'maintenanceSessionId',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.LaundryProductScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  description: 'description',
+  price: 'price',
+  stock: 'stock',
+  category: 'category',
+  isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
 
-exports.Prisma.OrderItemScalarFieldEnum = {
+exports.Prisma.LaundryOrderScalarFieldEnum = {
+  id: 'id',
+  orderNumber: 'orderNumber',
+  status: 'status',
+  receivedDate: 'receivedDate',
+  processedDate: 'processedDate',
+  readyDate: 'readyDate',
+  deliveryDate: 'deliveryDate',
+  pickupAddress: 'pickupAddress',
+  deliveryAddress: 'deliveryAddress',
+  instructions: 'instructions',
+  subtotal: 'subtotal',
+  taxes: 'taxes',
+  deliveryFee: 'deliveryFee',
+  totalAmount: 'totalAmount',
+  notes: 'notes',
+  receivedByClient: 'receivedByClient',
+  receivedAt: 'receivedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  managerId: 'managerId',
+  clientId: 'clientId'
+};
+
+exports.Prisma.LaundryOrderItemScalarFieldEnum = {
   id: 'id',
   quantity: 'quantity',
-  price: 'price',
+  unitPrice: 'unitPrice',
+  subtotal: 'subtotal',
+  notes: 'notes',
   orderId: 'orderId',
   productId: 'productId',
   createdAt: 'createdAt',
@@ -403,8 +508,95 @@ exports.Prisma.DeliveryNoteScalarFieldEnum = {
   id: 'id',
   number: 'number',
   date: 'date',
+  notes: 'notes',
   orderId: 'orderId',
-  laundryManagerId: 'laundryManagerId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.TaskAssignmentScalarFieldEnum = {
+  id: 'id',
+  title: 'title',
+  description: 'description',
+  type: 'type',
+  priority: 'priority',
+  status: 'status',
+  assignedAt: 'assignedAt',
+  dueDate: 'dueDate',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt',
+  agentId: 'agentId',
+  propertyId: 'propertyId',
+  reservationId: 'reservationId',
+  cleaningSessionId: 'cleaningSessionId',
+  maintenanceSessionId: 'maintenanceSessionId',
+  ticketId: 'ticketId',
+  estimatedDuration: 'estimatedDuration',
+  actualDuration: 'actualDuration',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.PropertyContractScalarFieldEnum = {
+  id: 'id',
+  contractNumber: 'contractNumber',
+  type: 'type',
+  status: 'status',
+  startDate: 'startDate',
+  endDate: 'endDate',
+  propertyId: 'propertyId',
+  propertyOwnerId: 'propertyOwnerId',
+  monthlyFee: 'monthlyFee',
+  commissionRate: 'commissionRate',
+  documentUrl: 'documentUrl',
+  signedAt: 'signedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.SuperAdminInvoiceScalarFieldEnum = {
+  id: 'id',
+  invoiceNumber: 'invoiceNumber',
+  status: 'status',
+  issueDate: 'issueDate',
+  dueDate: 'dueDate',
+  paidAt: 'paidAt',
+  subtotal: 'subtotal',
+  taxRate: 'taxRate',
+  taxAmount: 'taxAmount',
+  totalAmount: 'totalAmount',
+  paidAmount: 'paidAmount',
+  superAdminId: 'superAdminId',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.SuperAdminInvoiceItemScalarFieldEnum = {
+  id: 'id',
+  description: 'description',
+  quantity: 'quantity',
+  unitPrice: 'unitPrice',
+  totalPrice: 'totalPrice',
+  poleType: 'poleType',
+  invoiceId: 'invoiceId'
+};
+
+exports.Prisma.LaundryInvoiceScalarFieldEnum = {
+  id: 'id',
+  invoiceNumber: 'invoiceNumber',
+  status: 'status',
+  issueDate: 'issueDate',
+  dueDate: 'dueDate',
+  paidAt: 'paidAt',
+  subtotal: 'subtotal',
+  taxRate: 'taxRate',
+  taxAmount: 'taxAmount',
+  totalAmount: 'totalAmount',
+  paidAmount: 'paidAmount',
+  clientId: 'clientId',
+  notes: 'notes',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -414,23 +606,14 @@ exports.Prisma.NotificationScalarFieldEnum = {
   title: 'title',
   message: 'message',
   type: 'type',
-  userId: 'userId',
+  priority: 'priority',
   read: 'read',
+  userId: 'userId',
+  relatedType: 'relatedType',
+  relatedId: 'relatedId',
+  actionUrl: 'actionUrl',
+  expiresAt: 'expiresAt',
   createdAt: 'createdAt'
-};
-
-exports.Prisma.ServiceScalarFieldEnum = {
-  id: 'id',
-  name: 'name',
-  description: 'description'
-};
-
-exports.Prisma.ServiceUserScalarFieldEnum = {
-  id: 'id',
-  name: 'name',
-  status: 'status',
-  serviceId: 'serviceId',
-  userId: 'userId'
 };
 
 exports.Prisma.SessionScalarFieldEnum = {
@@ -474,6 +657,11 @@ exports.Prisma.SortOrder = {
   desc: 'desc'
 };
 
+exports.Prisma.NullableJsonNullValueInput = {
+  DbNull: Prisma.DbNull,
+  JsonNull: Prisma.JsonNull
+};
+
 exports.Prisma.QueryMode = {
   default: 'default',
   insensitive: 'insensitive'
@@ -483,84 +671,158 @@ exports.Prisma.NullsOrder = {
   first: 'first',
   last: 'last'
 };
-exports.Role = exports.$Enums.Role = {
-  admin: 'admin',
-  user: 'user',
+
+exports.Prisma.JsonNullValueFilter = {
+  DbNull: Prisma.DbNull,
+  JsonNull: Prisma.JsonNull,
+  AnyNull: Prisma.AnyNull
+};
+exports.UserRole = exports.$Enums.UserRole = {
+  super_admin: 'super_admin',
+  pole_manager: 'pole_manager',
+  property_owner: 'property_owner',
+  laundry_client: 'laundry_client',
   agent: 'agent'
+};
+
+exports.UserStatus = exports.$Enums.UserStatus = {
+  active: 'active',
+  inactive: 'inactive',
+  pending: 'pending',
+  suspended: 'suspended'
+};
+
+exports.PoleType = exports.$Enums.PoleType = {
+  conciergerie: 'conciergerie',
+  cleaning: 'cleaning',
+  maintenance: 'maintenance',
+  laundry: 'laundry'
+};
+
+exports.PoleStatus = exports.$Enums.PoleStatus = {
+  active: 'active',
+  inactive: 'inactive',
+  trial: 'trial',
+  expired: 'expired'
+};
+
+exports.AgentType = exports.$Enums.AgentType = {
+  cleaning: 'cleaning',
+  maintenance: 'maintenance',
+  laundry: 'laundry',
+  concierge: 'concierge',
+  multi_service: 'multi_service'
+};
+
+exports.AgentAvailability = exports.$Enums.AgentAvailability = {
+  available: 'available',
+  busy: 'busy',
+  offline: 'offline',
+  on_break: 'on_break',
+  on_mission: 'on_mission'
 };
 
 exports.PropertyStatus = exports.$Enums.PropertyStatus = {
   available: 'available',
   occupied: 'occupied',
   maintenance: 'maintenance',
-  reserved: 'reserved'
+  reserved: 'reserved',
+  offline: 'offline'
 };
 
-exports.AgentType = exports.$Enums.AgentType = {
-  cleaning: 'cleaning',
-  laundry: 'laundry',
-  maintenance: 'maintenance'
+exports.ReservationStatus = exports.$Enums.ReservationStatus = {
+  confirmed: 'confirmed',
+  pending: 'pending',
+  cancelled: 'cancelled',
+  completed: 'completed',
+  in_progress: 'in_progress',
+  checked_in: 'checked_in',
+  checked_out: 'checked_out'
 };
 
-exports.InterventionStatus = exports.$Enums.InterventionStatus = {
+exports.SessionStatus = exports.$Enums.SessionStatus = {
   planned: 'planned',
   in_progress: 'in_progress',
   completed: 'completed',
+  cancelled: 'cancelled',
+  paused: 'paused',
+  pending_validation: 'pending_validation'
+};
+
+exports.TicketStatus = exports.$Enums.TicketStatus = {
+  open: 'open',
+  assigned: 'assigned',
+  in_progress: 'in_progress',
+  resolved: 'resolved',
+  closed: 'closed',
   cancelled: 'cancelled'
+};
+
+exports.TicketPriority = exports.$Enums.TicketPriority = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  urgent: 'urgent',
+  critical: 'critical'
 };
 
 exports.OrderStatus = exports.$Enums.OrderStatus = {
   received: 'received',
   processing: 'processing',
-  delivery: 'delivery',
+  ready: 'ready',
+  pickup_scheduled: 'pickup_scheduled',
+  in_delivery: 'in_delivery',
+  delivered: 'delivered',
   completed: 'completed',
+  cancelled: 'cancelled',
   returned: 'returned'
 };
 
-exports.TicketStatus = exports.$Enums.TicketStatus = {
-  open: 'open',
-  in_progress: 'in_progress',
-  resolved: 'resolved',
-  closed: 'closed'
-};
-
-exports.ServiceUserStatus = exports.$Enums.ServiceUserStatus = {
-  active: 'active',
-  inactive: 'inactive'
+exports.NotificationType = exports.$Enums.NotificationType = {
+  info: 'info',
+  warning: 'warning',
+  error: 'error',
+  success: 'success',
+  task_assigned: 'task_assigned',
+  status_update: 'status_update',
+  payment_due: 'payment_due',
+  review_request: 'review_request',
+  pole_activated: 'pole_activated',
+  pole_expired: 'pole_expired'
 };
 
 exports.Prisma.ModelName = {
   User: 'User',
-  ConciergerieManager: 'ConciergerieManager',
-  Task: 'Task',
+  SuperAdminProfile: 'SuperAdminProfile',
+  PoleSubscription: 'PoleSubscription',
+  PoleManagerProfile: 'PoleManagerProfile',
+  PropertyOwnerProfile: 'PropertyOwnerProfile',
+  LaundryClientProfile: 'LaundryClientProfile',
+  AgentProfile: 'AgentProfile',
+  AgentSpecialty: 'AgentSpecialty',
   Property: 'Property',
-  Reservation: 'Reservation',
-  Agent: 'Agent',
-  MaintenanceSession: 'MaintenanceSession',
-  Maintenance: 'Maintenance',
-  CleaningSession: 'CleaningSession',
-  Cleaning: 'Cleaning',
-  CleaningManager: 'CleaningManager',
-  InterventionSite: 'InterventionSite',
-  SiteCleaningSession: 'SiteCleaningSession',
-  LaundryManager: 'LaundryManager',
-  Product: 'Product',
-  Order: 'Order',
-  Ticket: 'Ticket',
-  Payment: 'Payment',
+  PropertyFeature: 'PropertyFeature',
   PropertyPhoto: 'PropertyPhoto',
-  CleaningPhoto: 'CleaningPhoto',
-  MaintenancePhoto: 'MaintenancePhoto',
-  SiteCleaningPhoto: 'SiteCleaningPhoto',
-  TicketPhoto: 'TicketPhoto',
+  PropertyReview: 'PropertyReview',
+  Reservation: 'Reservation',
+  CleaningSession: 'CleaningSession',
   CleaningChecklist: 'CleaningChecklist',
-  SiteCleaningChecklist: 'SiteCleaningChecklist',
-  CleaningPlanning: 'CleaningPlanning',
-  OrderItem: 'OrderItem',
+  CleaningPhoto: 'CleaningPhoto',
+  Ticket: 'Ticket',
+  TicketPhoto: 'TicketPhoto',
+  MaintenanceSession: 'MaintenanceSession',
+  MaintenanceMaterial: 'MaintenanceMaterial',
+  MaintenancePhoto: 'MaintenancePhoto',
+  LaundryProduct: 'LaundryProduct',
+  LaundryOrder: 'LaundryOrder',
+  LaundryOrderItem: 'LaundryOrderItem',
   DeliveryNote: 'DeliveryNote',
+  TaskAssignment: 'TaskAssignment',
+  PropertyContract: 'PropertyContract',
+  SuperAdminInvoice: 'SuperAdminInvoice',
+  SuperAdminInvoiceItem: 'SuperAdminInvoiceItem',
+  LaundryInvoice: 'LaundryInvoice',
   Notification: 'Notification',
-  Service: 'Service',
-  ServiceUser: 'ServiceUser',
   Session: 'Session',
   Account: 'Account',
   Verification: 'Verification'

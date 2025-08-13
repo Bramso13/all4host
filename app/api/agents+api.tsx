@@ -1,5 +1,6 @@
 import { auth } from "~/lib/auth";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "~/prisma/generated/client/edge";
+
 import { withAccelerate } from "@prisma/extension-accelerate";
 
 export async function GET(request: Request) {
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, description, userId } = body;
+    const { name, description, userId, type, email } = body;
 
     const prisma = new PrismaClient({
       datasourceUrl: process.env.DATABASE_URL,
@@ -84,12 +85,54 @@ export async function POST(request: Request) {
       );
     }
 
+    const user = await auth.api.signUpEmail({
+      body: {
+        email: email,
+        password: "password",
+        name: name,
+      },
+    });
+
+    if (!user) {
+      return new Response(
+        JSON.stringify({
+          error: "Erreur lors de la création de l'utilisateur",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const agent = await prisma.agent.create({
       data: {
         name,
         description,
-        userId,
+        userId: user.user.id,
         conciergerieManagerId: conciergerieManager.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        type,
+      },
+    });
+
+    if (!agent) {
+      return new Response(JSON.stringify(agent), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    await prisma.user.update({
+      where: { id: user.user.id },
+      data: {
+        agent: {
+          connect: {
+            id: agent.id,
+          },
+        },
+        role: "agent",
       },
     });
 

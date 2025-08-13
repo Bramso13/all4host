@@ -21,29 +21,17 @@ import { Text } from "~/components/ui/text";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { IconSymbol } from "~/components/ui/IconSymbol";
 import tw from "twrnc";
+import { authClient } from "~/lib/auth-client";
 
-interface AuthScreenProps {
-  onLogin?: (email: string, password: string) => Promise<string | null>;
-  onRegister?: (
-    name: string,
-    email: string,
-    password: string,
-    confirmPassword: string
-  ) => Promise<string | null>;
-  isLoading?: boolean;
-}
-
-export function AuthScreen({
-  onLogin,
-  onRegister,
-  isLoading = false,
-}: AuthScreenProps) {
+export function AuthScreen() {
+  const [isLoading, setIsLoading] = useState(false);
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const handleSubmit = async () => {
+    setIsLoading(true);
     if (!email || !password) {
       Alert.alert("Erreur", "Veuillez remplir tous les champs obligatoires");
       return;
@@ -53,16 +41,25 @@ export function AuthScreen({
       Alert.alert("Erreur", "Les mots de passe ne correspondent pas");
       return;
     }
+    console.log("email", email);
 
-    if (isLoginMode && onLogin) {
-      const error = await onLogin(email, password);
+    if (isLoginMode) {
+      const error = await authClient.signIn.email({ email, password });
       if (error) {
-        Alert.alert("Erreur", error);
+        console.log("error", error);
+        setIsLoading(false);
+        Alert.alert("Erreur", error.error?.message);
       }
-    } else if (!isLoginMode && onRegister) {
-      const error = await onRegister(name, email, password, confirmPassword);
+    } else if (!isLoginMode) {
+      console.log("name", name);
+      const error = await authClient.signUp.email({
+        name,
+        email,
+        password,
+      });
       if (error) {
-        Alert.alert("Erreur", error);
+        Alert.alert("Erreur", error.error?.message);
+        setIsLoading(false);
       }
     }
   };
@@ -108,17 +105,19 @@ export function AuthScreen({
               </CardHeader>
 
               <CardContent style={tw`space-y-4`}>
-                <View style={tw`space-y-2`}>
-                  <Text variant="label">Nom</Text>
-                  <TextInput
-                    style={tw`h-12 pl-10 pr-4 rounded-md border border-gray-300 bg-white text-black dark:border-gray-600 dark:bg-gray-800 dark:text-white`}
-                    placeholder="Votre nom"
-                    placeholderTextColor="#6B7280"
-                    value={name}
-                    onChangeText={setName}
-                    autoCapitalize="none"
-                  />
-                </View>
+                {!isLoginMode && (
+                  <View style={tw`space-y-2`}>
+                    <Text variant="label">Nom</Text>
+                    <TextInput
+                      style={tw`h-12 pl-10 pr-4 rounded-md border border-gray-300 bg-white text-black dark:border-gray-600 dark:bg-gray-800 dark:text-white`}
+                      placeholder="Votre nom"
+                      placeholderTextColor="#6B7280"
+                      value={name}
+                      onChangeText={setName}
+                      autoCapitalize="none"
+                    />
+                  </View>
+                )}
 
                 {/* Email */}
                 <View style={tw`space-y-2`}>

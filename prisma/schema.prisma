@@ -8,490 +8,1019 @@ generator client {
   output   = "./generated/client"
 }
 
-enum Role {
-  admin
-  user
-  agent
+// Enums pour les rôles
+enum UserRole {
+  super_admin // Admin principal qui paye pour débloquer les pôles
+  pole_manager // Manager spécialisé par pôle
+  property_owner // Propriétaire de bien
+  laundry_client // Client de la blanchisserie
+  agent // Agent terrain
 }
 
-// New enums for statuses
+enum UserStatus {
+  active
+  inactive
+  pending
+  suspended
+}
+
+// Les différents pôles d'activité
+enum PoleType {
+  conciergerie
+  cleaning
+  maintenance
+  laundry
+}
+
+enum PoleStatus {
+  active // Pôle payé et actif
+  inactive // Pôle non payé ou désactivé
+  trial // Période d'essai
+  expired // Abonnement expiré
+}
+
+enum AgentType {
+  cleaning
+  maintenance
+  laundry
+  concierge
+  multi_service
+}
+
+enum AgentAvailability {
+  available
+  busy
+  offline
+  on_break
+  on_mission
+}
+
 enum PropertyStatus {
   available
   occupied
   maintenance
   reserved
+  offline
+}
+
+enum ReservationStatus {
+  confirmed
+  pending
+  cancelled
+  completed
+  in_progress
+  checked_in
+  checked_out
+}
+
+enum SessionStatus {
+  planned
+  in_progress
+  completed
+  cancelled
+  paused
+  pending_validation
+}
+
+enum TicketStatus {
+  open
+  assigned
+  in_progress
+  resolved
+  closed
+  cancelled
+}
+
+enum TicketPriority {
+  low
+  medium
+  high
+  urgent
+  critical
 }
 
 enum OrderStatus {
   received
   processing
-  delivery
+  ready
+  pickup_scheduled
+  in_delivery
+  delivered
   completed
+  cancelled
   returned
 }
 
-enum TicketStatus {
-  open
-  in_progress
-  resolved
-  closed
+enum NotificationType {
+  info
+  warning
+  error
+  success
+  task_assigned
+  status_update
+  payment_due
+  review_request
+  pole_activated
+  pole_expired
 }
 
-enum InterventionStatus {
-  planned
-  in_progress
-  completed
-  cancelled
-}
-
-enum ServiceType {
-  cleaning
-  maintenance
-  housekeeping
-  laundry
-}
-
+// Modèle utilisateur central
 model User {
-  id   String @id @default(uuid())
-  role Role   @default(user)
+  id        String     @id @default(uuid())
+  email     String     @unique
+  password  String?
+  name      String
+  firstName String?
+  lastName  String?
+  phone     String?
+  avatar    String?
+  role      UserRole
+  status    UserStatus @default(pending)
 
-  name          String
-  email         String
-  emailVerified Boolean
-  image         String?
-  createdAt     DateTime
-  updatedAt     DateTime
+  // Préférences
+  language String? @default("fr")
+  timezone String? @default("Europe/Paris")
+
+  // Vérification
+  emailVerified Boolean   @default(false)
+  phoneVerified Boolean   @default(false)
+  lastLoginAt   DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relations selon le rôle
   sessions      Session[]
   accounts      Account[]
+  notifications Notification[]
 
-  conciergerieManagers ConciergerieManager[]
-  cleaningManagers     CleaningManager[]
-  laundryManagers      LaundryManager[]
-  notifications        Notification[]
-  serviceUsers         ServiceUser[]
+  // Profils spécifiques
+  superAdminProfile    SuperAdminProfile?
+  poleManagerProfile   PoleManagerProfile?
+  propertyOwnerProfile PropertyOwnerProfile?
+  laundryClientProfile LaundryClientProfile?
+  agentProfile         AgentProfile?
 
-  agent Agent[]
-
-  @@unique([email])
-  @@map("user")
+  @@map("users")
 }
 
-model ConciergerieManager {
-  id         String     @id @default(uuid())
-  name       String
-  userId     String
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt  DateTime
-  updatedAt  DateTime
+// 1. Super Admin - Celui qui paye et gère tout
+model SuperAdminProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Informations entreprise
+  companyName    String
+  businessNumber String?
+  vatNumber      String?
+
+  // Adresse de facturation
+  billingAddress String
+  billingCity    String
+  billingCountry String @default("France")
+  billingPostal  String
+
+  // Plan et abonnement
+  subscriptionTier   String @default("basic") // "basic", "pro", "enterprise"
+  subscriptionStatus String @default("active") // "active", "past_due", "cancelled"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations - ce qu'il possède/gère
+  poleSubscriptions PoleSubscription[]
+  poleManagers      PoleManagerProfile[]
+  invoices          SuperAdminInvoice[]
+
+  @@map("super_admin_profiles")
+}
+
+// Abonnements par pôle
+model PoleSubscription {
+  id       String     @id @default(uuid())
+  poleType PoleType
+  status   PoleStatus @default(inactive)
+
+  // Dates d'abonnement
+  startDate    DateTime?
+  endDate      DateTime?
+  trialEndDate DateTime?
+
+  // Tarification
+  monthlyPrice    Float
+  lastBillingDate DateTime?
+  nextBillingDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  superAdminId String
+  superAdmin   SuperAdminProfile @relation(fields: [superAdminId], references: [id], onDelete: Cascade)
+
+  @@unique([superAdminId, poleType])
+  @@map("pole_subscriptions")
+}
+
+// 2. Manager par pôle - Gère un pôle spécifique
+model PoleManagerProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Pôle géré
+  poleTypes PoleType[]
+
+  // Permissions spécifiques au pôle
+  canViewAnalytics Boolean @default(true)
+  canManageAgents  Boolean @default(true)
+  canManageClients Boolean @default(false)
+  canManageBilling Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Rattaché à un super admin
+  superAdminId String
+  superAdmin   SuperAdminProfile @relation(fields: [superAdminId], references: [id], onDelete: Cascade)
+
+  // Relations selon le pôle
+  properties          Property[]
+  reservations        Reservation[]
+  cleaningSessions    CleaningSession[]
+  tickets             Ticket[]
+  maintenanceSessions MaintenanceSession[]
+  laundryOrders       LaundryOrder[]
+  managedAgents       AgentProfile[]
+
+  @@map("pole_manager_profiles")
+}
+
+// 3. Propriétaire de bien - Voit ce qui se passe sur son bien
+model PropertyOwnerProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Informations propriétaire
+  company   String?
+  taxNumber String?
+
+  // Adresse
+  address String?
+  city    String?
+  country String? @default("France")
+  postal  String?
+
+  // Préférences de communication
+  preferredContactMethod String? @default("email")
+  receiveNotifications   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Ses biens
   properties Property[]
-  agents     Agent[]
-  tasks      Task[]
+  contracts  PropertyContract[]
+
+  @@map("property_owner_profiles")
 }
 
-enum TaskType {
-  cleaning
-  laundry
-  maintenance
+// 4. Client de blanchisserie - Suit ses commandes
+model LaundryClientProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Informations client
+  companyName   String?
+  contactPerson String?
+
+  // Adresses par défaut
+  defaultPickupAddress   String?
+  defaultDeliveryAddress String
+
+  // Préférences
+  preferredPickupTime String? // "morning", "afternoon", "evening"
+  specialInstructions String?
+
+  // Statut commercial
+  creditLimit  Float? @default(0)
+  paymentTerms Int?   @default(30)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Ses commandes
+  laundryOrders   LaundryOrder[]
+  laundryInvoices LaundryInvoice[]
+
+  @@map("laundry_client_profiles")
 }
 
-model Task {
-  id                    String               @id @default(uuid())
-  name                  String
-  description           String
-  type                  TaskType             @default(cleaning)
-  createdAt             DateTime
-  updatedAt             DateTime
-  conciergerieManagerId String?
-  conciergerieManager   ConciergerieManager? @relation(fields: [conciergerieManagerId], references: [id], onDelete: Cascade)
-  agentId               String?
-  agent                 Agent?               @relation(fields: [agentId], references: [id], onDelete: Cascade)
+// 5. Agent - Exécute les tâches
+model AgentProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  agentType    AgentType
+  availability AgentAvailability @default(offline)
+  employeeId   String?           @unique
+
+  // Compétences
+  specialties    AgentSpecialty[]
+  certifications String[]
+
+  // Localisation
+  currentLocation Json?
+  serviceZones    String[]
+
+  // Statistiques
+  rating         Float? @default(0)
+  completedTasks Int    @default(0)
+  averageRating  Float? @default(0)
+  responseTime   Int?
+
+  // Planning
+  workingHours         Json?
+  availabilityCalendar Json?
+
+  // Informations contractuelles
+  hourlyRate Float?
+  isActive   Boolean   @default(true)
+  hireDate   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Manager qui le supervise
+  managerId String
+  manager   PoleManagerProfile @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  // Tâches assignées
+  cleaningSessions    CleaningSession[]
+  maintenanceSessions MaintenanceSession[]
+  tickets             Ticket[]
+  taskAssignments     TaskAssignment[]
+
+  @@map("agent_profiles")
 }
 
+model AgentSpecialty {
+  id        String  @id @default(uuid())
+  name      String
+  category  String?
+  level     String? // "débutant", "intermédiaire", "expert"
+  certified Boolean @default(true)
+
+  agentId String
+  agent   AgentProfile @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@map("agent_specialties")
+}
+
+// Propriétés
 model Property {
-  id                    String               @id @default(uuid())
-  name                  String
-  description           String
-  status                PropertyStatus       @default(available)
-  location              String?
-  surface               Float?
-  numberOfRooms         Int?
-  numberOfBathrooms     Int?
-  createdAt             DateTime
-  updatedAt             DateTime
-  conciergerieManagerId String
-  conciergerieManager   ConciergerieManager  @relation(fields: [conciergerieManagerId], references: [id], onDelete: Cascade)
-  cleaningSessions      CleaningSession[]
-  maintenanceSessions   MaintenanceSession[]
-  reservations          Reservation[]
-  payments              Payment[]
-  tickets               Ticket[]
-  photos                PropertyPhoto[]
-}
-
-model Reservation {
-  id         String   @id @default(uuid())
-  propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  startDate  DateTime
-  endDate    DateTime
-  client     String?
-  notes      String?
-  createdAt  DateTime
-  updatedAt  DateTime
-}
-
-enum AgentType {
-  cleaning
-  laundry
-  maintenance
-}
-
-model Agent {
-  id                    String                @id @default(uuid())
-  name                  String
-  description           String
-  createdAt             DateTime
-  updatedAt             DateTime
-  type                  AgentType             @default(cleaning)
-  maintenanceSessions   MaintenanceSession[]
-  cleaningSessions      CleaningSession[]
-  conciergerieManagerId String
-  conciergerieManager   ConciergerieManager   @relation(fields: [conciergerieManagerId], references: [id], onDelete: Cascade)
-  tasks                 Task[]
-  tickets               Ticket[]
-  cleaningPlannings     CleaningPlanning[]
-  userId                String
-  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  siteCleaningSessions  SiteCleaningSession[]
-  cleaningManagerId     String?
-  cleaningManager       CleaningManager?      @relation(fields: [cleaningManagerId], references: [id], onDelete: Cascade)
-}
-
-model MaintenanceSession {
-  id            String             @id @default(uuid())
-  propertyId    String
-  property      Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  createdAt     DateTime
-  updatedAt     DateTime
-  maintenanceId String
-  maintenance   Maintenance        @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
-  agentId       String
-  agent         Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  startDate     DateTime?
-  endDate       DateTime?
-  notes         String?
-  photos        MaintenancePhoto[]
-}
-
-model Maintenance {
-  id                  String               @id @default(uuid())
-  name                String
-  description         String
-  createdAt           DateTime
-  updatedAt           DateTime
-  sessionMaintenances MaintenanceSession[]
-}
-
-model CleaningSession {
-  id         String              @id @default(uuid())
-  propertyId String
-  property   Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  createdAt  DateTime
-  updatedAt  DateTime
-  cleaningId String
-  cleaning   Cleaning            @relation(fields: [cleaningId], references: [id], onDelete: Cascade)
-  agentId    String
-  agent      Agent               @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  startDate  DateTime?
-  endDate    DateTime?
-  duration   Int? // in minutes
-  notes      String?
-  photos     CleaningPhoto[]
-  checklist  CleaningChecklist[]
-}
-
-model Cleaning {
-  id               String            @id @default(uuid())
-  name             String
-  description      String
-  createdAt        DateTime
-  updatedAt        DateTime
-  cleaningSessions CleaningSession[]
-}
-
-model CleaningManager {
-  id                   String                @id @default(uuid())
-  userId               String
-  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt            DateTime
-  updatedAt            DateTime
-  interventionSites    InterventionSite[]
-  siteCleaningSessions SiteCleaningSession[]
-  cleaningAgents       Agent[]
-  cleaningPlannings    CleaningPlanning[]
-}
-
-model InterventionSite {
-  id                   String                @id @default(uuid())
-  name                 String
-  description          String
-  client               String?
-  site                 String?
-  surface              Float?
-  type                 String?
-  address              String?
-  createdAt            DateTime
-  updatedAt            DateTime
-  cleaningManagerId    String
-  cleaningManager      CleaningManager       @relation(fields: [cleaningManagerId], references: [id], onDelete: Cascade)
-  siteCleaningSessions SiteCleaningSession[]
-  cleaningPlannings    CleaningPlanning[]
-}
-
-model SiteCleaningSession {
-  id                 String           @id @default(uuid())
-  interventionSiteId String
-  interventionSite   InterventionSite @relation(fields: [interventionSiteId], references: [id], onDelete: Cascade)
-  createdAt          DateTime
-  updatedAt          DateTime
-  cleaningManagerId  String
-  cleaningManager    CleaningManager  @relation(fields: [cleaningManagerId], references: [id], onDelete: Cascade)
-
-  startDate        DateTime?
-  endDate          DateTime?
-  duration         Int? // in minutes
-  notes            String?
-  photos           SiteCleaningPhoto[]
-  checklist        SiteCleaningChecklist[]
-  status           InterventionStatus      @default(planned)
-  laundryManagerId String?
-  laundryManager   LaundryManager?         @relation(fields: [laundryManagerId], references: [id], onDelete: Cascade)
-  cleaningAgentId  String?
-  cleaningAgent    Agent?                  @relation(fields: [cleaningAgentId], references: [id], onDelete: Cascade)
-}
-
-model LaundryManager {
-  id                   String                @id @default(uuid())
-  userId               String
-  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt            DateTime
-  updatedAt            DateTime
-  products             Product[]
-  orders               Order[]
-  deliveryNotes        DeliveryNote[]
-  siteCleaningSessions SiteCleaningSession[]
-}
-
-model Product {
-  id               String         @id @default(uuid())
-  name             String
-  description      String
-  price            Float?
-  stock            Int?
-  createdAt        DateTime
-  updatedAt        DateTime
-  orderItems       OrderItem[]
-  laundryManagerId String
-  laundryManager   LaundryManager @relation(fields: [laundryManagerId], references: [id], onDelete: Cascade)
-}
-
-model Order {
-  id               String         @id @default(uuid())
-  name             String
-  description      String
-  status           OrderStatus    @default(received)
-  receivedDate     DateTime?
-  deliveryDate     DateTime?
-  client           String?
-  address          String?
-  phone            String?
-  total            Float?
-  createdAt        DateTime
-  updatedAt        DateTime
-  laundryManagerId String
-  laundryManager   LaundryManager @relation(fields: [laundryManagerId], references: [id], onDelete: Cascade)
-  orderItems       OrderItem[]
-  deliveryNotes    DeliveryNote[]
-}
-
-// New models for advanced features
-
-model Ticket {
-  id          String        @id @default(uuid())
-  title       String
+  id          String         @id @default(uuid())
+  name        String
   description String
-  status      TicketStatus  @default(open)
-  priority    String?
-  propertyId  String
-  property    Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  agentId     String?
-  agent       Agent?        @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  createdAt   DateTime
-  updatedAt   DateTime
-  photos      TicketPhoto[]
+  status      PropertyStatus @default(available)
+
+  // Localisation
+  address    String
+  city       String
+  country    String  @default("France")
+  postalCode String?
+  latitude   Float?
+  longitude  Float?
+
+  // Caractéristiques
+  surface           Float?
+  numberOfRooms     Int?
+  numberOfBedrooms  Int?
+  numberOfBathrooms Int?
+  maxGuests         Int?
+  floor             Int?
+  hasElevator       Boolean?
+  hasParking        Boolean?
+  hasBalcony        Boolean?
+
+  // Pricing
+  pricePerNight   Float?
+  cleaningFee     Float?
+  serviceFee      Float?
+  securityDeposit Float?
+
+  // Features
+  features PropertyFeature[]
+  photos   PropertyPhoto[]
+
+  // Ratings
+  averageRating Float? @default(0)
+  totalReviews  Int    @default(0)
+
+  // Policies
+  checkInTime        String? @default("15:00")
+  checkOutTime       String? @default("11:00")
+  cancellationPolicy String?
+  houseRules         String?
+
+  // Instructions pour agents
+  accessInstructions   String?
+  cleaningInstructions String?
+  maintenanceNotes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Propriétaire du bien
+  ownerId String
+  owner   PropertyOwnerProfile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // Manager responsable (conciergerie)
+  managerId String?
+  manager   PoleManagerProfile? @relation(fields: [managerId], references: [id])
+
+  // Relations
+  reservations        Reservation[]
+  cleaningSessions    CleaningSession[]
+  maintenanceSessions MaintenanceSession[]
+  tickets             Ticket[]
+  reviews             PropertyReview[]
+  contracts           PropertyContract[]
+
+  @@map("properties")
 }
 
-model Payment {
+model PropertyFeature {
   id         String   @id @default(uuid())
-  amount     Float
-  currency   String   @default("EUR")
-  method     String?
-  status     String?
+  name       String
+  icon       String?
+  category   String?
   propertyId String
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  createdAt  DateTime
-  updatedAt  DateTime
+
+  @@map("property_features")
 }
 
 model PropertyPhoto {
   id         String   @id @default(uuid())
   url        String
-  type       String? // before, after, general
+  caption    String?
+  isMain     Boolean  @default(false)
+  order      Int      @default(0)
+  type       String?
   propertyId String
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  createdAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@map("property_photos")
 }
 
-model CleaningPhoto {
-  id                String          @id @default(uuid())
-  url               String
-  type              String? // before, after
-  cleaningSessionId String
-  cleaningSession   CleaningSession @relation(fields: [cleaningSessionId], references: [id], onDelete: Cascade)
-  createdAt         DateTime
+model PropertyReview {
+  id         String   @id @default(uuid())
+  rating     Float
+  comment    String?
+  guestName  String
+  guestEmail String?
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@map("property_reviews")
 }
 
-model MaintenancePhoto {
-  id                   String             @id @default(uuid())
-  url                  String
-  type                 String? // before, after, problem
-  maintenanceSessionId String
-  maintenanceSession   MaintenanceSession @relation(fields: [maintenanceSessionId], references: [id], onDelete: Cascade)
-  createdAt            DateTime
+// Réservations
+model Reservation {
+  id String @id @default(uuid())
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // Informations invité
+  guestName  String
+  guestEmail String
+  guestPhone String?
+  guestCount Int     @default(1)
+
+  // Dates
+  checkIn  DateTime
+  checkOut DateTime
+  nights   Int
+
+  // Tarification
+  basePrice   Float
+  cleaningFee Float?
+  serviceFee  Float?
+  taxes       Float?
+  totalPrice  Float
+
+  // Statut
+  status ReservationStatus @default(pending)
+  notes  String?
+
+  // Références
+  confirmationCode String? @unique
+  bookingSource    String? // "direct", "airbnb", "booking.com"
+
+  // Check-in/out
+  checkInTime  DateTime?
+  checkOutTime DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Manager responsable
+  managerId String
+  manager   PoleManagerProfile @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  @@map("reservations")
 }
 
-model SiteCleaningPhoto {
-  id                    String              @id @default(uuid())
-  url                   String
-  type                  String? // before, after
-  siteCleaningSessionId String
-  siteCleaningSession   SiteCleaningSession @relation(fields: [siteCleaningSessionId], references: [id], onDelete: Cascade)
-  createdAt             DateTime
-}
+// Sessions de nettoyage
+model CleaningSession {
+  id String @id @default(uuid())
 
-model TicketPhoto {
-  id        String   @id @default(uuid())
-  url       String
-  ticketId  String
-  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  createdAt DateTime
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  agentId String
+  agent   AgentProfile @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Planning
+  scheduledDate DateTime
+  startTime     DateTime?
+  endTime       DateTime?
+  duration      Int?
+
+  // Type
+  cleaningType String // "checkout", "maintenance", "deep", "regular"
+
+  // Détails
+  status     SessionStatus       @default(planned)
+  notes      String?
+  agentNotes String?
+  checklist  CleaningChecklist[]
+  photos     CleaningPhoto[]
+
+  // Évaluation
+  ownerRating   Float? // Note du propriétaire
+  managerRating Float? // Note du manager
+  feedback      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  managerId String
+  manager   PoleManagerProfile @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  @@map("cleaning_sessions")
 }
 
 model CleaningChecklist {
   id                String          @id @default(uuid())
   item              String
   completed         Boolean         @default(false)
+  notes             String?
+  order             Int             @default(0)
   cleaningSessionId String
   cleaningSession   CleaningSession @relation(fields: [cleaningSessionId], references: [id], onDelete: Cascade)
-  createdAt         DateTime
-  updatedAt         DateTime
+
+  @@map("cleaning_checklists")
 }
 
-model SiteCleaningChecklist {
-  id                    String              @id @default(uuid())
-  item                  String
-  completed             Boolean             @default(false)
-  siteCleaningSessionId String
-  siteCleaningSession   SiteCleaningSession @relation(fields: [siteCleaningSessionId], references: [id], onDelete: Cascade)
-  createdAt             DateTime
-  updatedAt             DateTime
+model CleaningPhoto {
+  id                String          @id @default(uuid())
+  url               String
+  type              String? // "before", "after", "issue"
+  caption           String?
+  cleaningSessionId String
+  cleaningSession   CleaningSession @relation(fields: [cleaningSessionId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+
+  @@map("cleaning_photos")
 }
 
-model CleaningPlanning {
-  id                 String           @id @default(uuid())
-  date               DateTime
-  startTime          String?
-  endTime            String?
-  interventionSiteId String
-  interventionSite   InterventionSite @relation(fields: [interventionSiteId], references: [id], onDelete: Cascade)
-  cleaningManagerId  String
-  cleaningManager    CleaningManager  @relation(fields: [cleaningManagerId], references: [id], onDelete: Cascade)
-  agentId            String?
-  agent              Agent?           @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  createdAt          DateTime
-  updatedAt          DateTime
+// Tickets de maintenance
+model Ticket {
+  id           String         @id @default(uuid())
+  ticketNumber String         @unique
+  title        String
+  description  String
+  status       TicketStatus   @default(open)
+  priority     TicketPriority @default(medium)
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // Qui a créé le ticket
+  reportedBy String // "owner", "guest", "agent", "manager"
+  reportedAt DateTime @default(now())
+
+  // Assignation
+  agentId    String?
+  agent      AgentProfile? @relation(fields: [agentId], references: [id])
+  assignedAt DateTime?
+
+  // Catégorie
+  category     String? // "plumbing", "electrical", "heating"
+  issueType    String? // "repair", "installation", "inspection"
+  roomLocation String? // "kitchen", "bathroom", "living_room"
+
+  // Média
+  photos TicketPhoto[]
+
+  // Résolution
+  resolution String?
+  resolvedAt DateTime?
+
+  // Coûts
+  estimatedCost     Float?
+  estimatedDuration Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  managerId String
+  manager   PoleManagerProfile @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  // Session de maintenance si converti
+  maintenanceSession MaintenanceSession?
+
+  @@map("tickets")
 }
 
-model OrderItem {
+model TicketPhoto {
   id        String   @id @default(uuid())
+  url       String
+  caption   String?
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@map("ticket_photos")
+}
+
+model MaintenanceSession {
+  id            String @id @default(uuid())
+  sessionNumber String @unique
+
+  ticketId String @unique
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  agentId String
+  agent   AgentProfile @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Planning
+  scheduledDate     DateTime
+  startTime         DateTime?
+  endTime           DateTime?
+  estimatedDuration Int?
+  actualDuration    Int?
+
+  // Détails
+  status          SessionStatus @default(planned)
+  notes           String?
+  workDescription String?
+  agentNotes      String?
+
+  // Matériaux
+  materials MaintenanceMaterial[]
+
+  // Coûts
+  laborCost     Float?
+  materialsCost Float?
+  totalCost     Float?
+
+  // Média
+  photos MaintenancePhoto[]
+
+  // Validation
+  ownerApproval   Boolean?
+  managerApproval Boolean?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  managerId String
+  manager   PoleManagerProfile @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  @@map("maintenance_sessions")
+}
+
+model MaintenanceMaterial {
+  id                   String             @id @default(uuid())
+  name                 String
+  quantity             Float
+  unit                 String
+  unitPrice            Float
+  totalPrice           Float
+  supplier             String?
+  maintenanceSessionId String
+  maintenanceSession   MaintenanceSession @relation(fields: [maintenanceSessionId], references: [id], onDelete: Cascade)
+
+  @@map("maintenance_materials")
+}
+
+model MaintenancePhoto {
+  id                   String             @id @default(uuid())
+  url                  String
+  type                 String? // "before", "after", "problem", "solution"
+  caption              String?
+  maintenanceSessionId String
+  maintenanceSession   MaintenanceSession @relation(fields: [maintenanceSessionId], references: [id], onDelete: Cascade)
+  createdAt            DateTime           @default(now())
+
+  @@map("maintenance_photos")
+}
+
+// Blanchisserie
+model LaundryProduct {
+  id          String  @id @default(uuid())
+  name        String
+  description String
+  price       Float
+  stock       Int     @default(0)
+  category    String?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderItems LaundryOrderItem[]
+
+  @@map("laundry_products")
+}
+
+model LaundryOrder {
+  id          String      @id @default(uuid())
+  orderNumber String      @unique
+  status      OrderStatus @default(received)
+
+  // Dates importantes
+  receivedDate  DateTime?
+  processedDate DateTime?
+  readyDate     DateTime?
+  deliveryDate  DateTime?
+
+  // Adresses
+  pickupAddress   String?
+  deliveryAddress String
+
+  // Instructions
+  instructions String?
+
+  // Tarification
+  subtotal    Float
+  taxes       Float?
+  deliveryFee Float?
+  totalAmount Float
+
+  // Notes
+  notes String?
+
+  // Le client peut marquer comme reçu
+  receivedByClient Boolean   @default(false)
+  receivedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  managerId String
+  manager   PoleManagerProfile @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  clientId String
+  client   LaundryClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  items         LaundryOrderItem[]
+  deliveryNotes DeliveryNote[]
+
+  @@map("laundry_orders")
+}
+
+model LaundryOrderItem {
+  id        String  @id @default(uuid())
   quantity  Int
-  price     Float?
-  orderId   String
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  unitPrice Float
+  subtotal  Float
+  notes     String?
+
+  orderId String
+  order   LaundryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
   productId String
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  createdAt DateTime
-  updatedAt DateTime
+  product   LaundryProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("laundry_order_items")
 }
 
 model DeliveryNote {
-  id               String         @id @default(uuid())
-  number           String
-  date             DateTime
-  orderId          String
-  order            Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  laundryManagerId String
-  laundryManager   LaundryManager @relation(fields: [laundryManagerId], references: [id], onDelete: Cascade)
-  createdAt        DateTime
-  updatedAt        DateTime
+  id     String   @id @default(uuid())
+  number String   @unique
+  date   DateTime
+  notes  String?
+
+  orderId String
+  order   LaundryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("delivery_notes")
 }
 
+// Système de tâches
+model TaskAssignment {
+  id          String  @id @default(uuid())
+  title       String
+  description String?
+  type        String
+  priority    String  @default("medium")
+  status      String  @default("assigned")
+
+  // Dates
+  assignedAt  DateTime  @default(now())
+  dueDate     DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  // Relations
+  agentId String
+  agent   AgentProfile @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Références
+  propertyId           String?
+  reservationId        String?
+  cleaningSessionId    String?
+  maintenanceSessionId String?
+  ticketId             String?
+
+  // Métadonnées
+  estimatedDuration Int?
+  actualDuration    Int?
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("task_assignments")
+}
+
+// Contrats entre propriétaires et service
+model PropertyContract {
+  id             String @id @default(uuid())
+  contractNumber String @unique
+  type           String // "property_management", "maintenance", "cleaning"
+  status         String @default("active")
+
+  startDate DateTime
+  endDate   DateTime?
+
+  // Parties
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  propertyOwnerId String
+  propertyOwner   PropertyOwnerProfile @relation(fields: [propertyOwnerId], references: [id], onDelete: Cascade)
+
+  // Termes financiers
+  monthlyFee     Float?
+  commissionRate Float?
+
+  // Documents
+  documentUrl String?
+  signedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("property_contracts")
+}
+
+// Facturation Super Admin
+model SuperAdminInvoice {
+  id            String @id @default(uuid())
+  invoiceNumber String @unique
+  status        String @default("draft")
+
+  // Dates
+  issueDate DateTime  @default(now())
+  dueDate   DateTime
+  paidAt    DateTime?
+
+  // Montants
+  subtotal    Float
+  taxRate     Float @default(20)
+  taxAmount   Float
+  totalAmount Float
+  paidAmount  Float @default(0)
+
+  // Relations
+  superAdminId String
+  superAdmin   SuperAdminProfile @relation(fields: [superAdminId], references: [id], onDelete: Cascade)
+
+  // Lignes de facturation
+  items SuperAdminInvoiceItem[]
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("super_admin_invoices")
+}
+
+model SuperAdminInvoiceItem {
+  id          String    @id @default(uuid())
+  description String // "Abonnement pôle Conciergerie", etc.
+  quantity    Float     @default(1)
+  unitPrice   Float
+  totalPrice  Float
+  poleType    PoleType?
+
+  invoiceId String
+  invoice   SuperAdminInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("super_admin_invoice_items")
+}
+
+// Facturation clients blanchisserie
+model LaundryInvoice {
+  id            String @id @default(uuid())
+  invoiceNumber String @unique
+  status        String @default("draft")
+
+  // Dates
+  issueDate DateTime  @default(now())
+  dueDate   DateTime
+  paidAt    DateTime?
+
+  // Montants
+  subtotal    Float
+  taxRate     Float @default(20)
+  taxAmount   Float
+  totalAmount Float
+  paidAmount  Float @default(0)
+
+  // Relations
+  clientId String
+  client   LaundryClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("laundry_invoices")
+}
+
+// Notifications contextuelles
 model Notification {
-  id        String   @id @default(uuid())
-  title     String
-  message   String
-  type      String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  read      Boolean  @default(false)
-  createdAt DateTime
+  id       String           @id @default(uuid())
+  title    String
+  message  String
+  type     NotificationType @default(info)
+  priority String?          @default("medium")
+  read     Boolean          @default(false)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Métadonnées pour navigation
+  relatedType String?
+  relatedId   String?
+  actionUrl   String?
+
+  // Expiration
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
 }
 
-model Service {
-  id          String        @id @default(uuid())
-  name        String
-  description String
-  users       ServiceUser[]
-}
-
-model ServiceUser {
-  id        String            @id @default(uuid())
-  name      String
-  status    ServiceUserStatus @default(active)
-  serviceId String
-  userId    String
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  service   Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-}
-
-enum ServiceUserStatus {
-  active
-  inactive
-}
-
+// Authentification
 model Session {
   id        String   @id @default(uuid())
   expiresAt DateTime
-  token     String
-  createdAt DateTime
-  updatedAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   ipAddress String?
   userAgent String?
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([token])
-  @@map("session")
+  @@map("sessions")
 }
 
 model Account {
@@ -507,10 +1036,10 @@ model Account {
   refreshTokenExpiresAt DateTime?
   scope                 String?
   password              String?
-  createdAt             DateTime
-  updatedAt             DateTime
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  @@map("account")
+  @@map("accounts")
 }
 
 model Verification {
@@ -518,8 +1047,8 @@ model Verification {
   identifier String
   value      String
   expiresAt  DateTime
-  createdAt  DateTime?
-  updatedAt  DateTime?
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
 
-  @@map("verification")
+  @@map("verifications")
 }
