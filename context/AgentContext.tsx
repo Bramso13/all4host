@@ -5,242 +5,28 @@ import React, {
   useState,
   useCallback,
 } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, ScrollView, Alert } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  TextInput,
+  ScrollView,
+  Alert,
+} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authClient } from "~/lib/auth-client";
-
-// Types basés EXACTEMENT sur le schéma Prisma
-
-// Enums from schema.prisma
-export type AgentType =
-  | "cleaning"
-  | "maintenance"
-  | "laundry"
-  | "concierge"
-  | "multi_service";
-export type AgentAvailability =
-  | "available"
-  | "busy"
-  | "offline"
-  | "on_break"
-  | "on_mission";
-export type SessionStatus =
-  | "planned"
-  | "in_progress"
-  | "completed"
-  | "cancelled"
-  | "paused"
-  | "pending_validation";
-export type TicketStatus =
-  | "open"
-  | "assigned"
-  | "in_progress"
-  | "resolved"
-  | "closed"
-  | "cancelled";
-export type TicketPriority = "low" | "medium" | "high" | "urgent" | "critical";
-
-// User model (simplifié pour les relations)
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  firstName?: string;
-  lastName?: string;
-  phone?: string;
-  avatar?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// PoleManagerProfile model (simplifié pour les relations)
-export interface PoleManagerProfile {
-  id: string;
-  userId: string;
-  poleType: "conciergerie" | "cleaning" | "maintenance" | "laundry";
-  canViewAnalytics: boolean;
-  canManageAgents: boolean;
-  canManageClients: boolean;
-  canManageBilling: boolean;
-  createdAt: string;
-  updatedAt: string;
-  superAdminId: string;
-  user?: User;
-}
-
-// Property model (simplifié pour les relations)
-export interface Property {
-  id: string;
-  name: string;
-  description: string;
-  status: "available" | "occupied" | "maintenance" | "reserved" | "offline";
-  address: string;
-  city: string;
-  country: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// AgentSpecialty - Modèle EXACT du schema.prisma
-export interface AgentSpecialty {
-  id: string;
-  name: string;
-  category?: string;
-  level?: string; // "débutant", "intermédiaire", "expert"
-  certified: boolean;
-  agentId: string;
-}
-
-// CleaningSession - Modèle EXACT du schema.prisma
-export interface CleaningSession {
-  id: string;
-  propertyId: string;
-  agentId: string;
-  scheduledDate: string;
-  startTime?: string;
-  endTime?: string;
-  duration?: number;
-  cleaningType: string; // "checkout", "maintenance", "deep", "regular"
-  status: SessionStatus;
-  notes?: string;
-  agentNotes?: string;
-  ownerRating?: number;
-  managerRating?: number;
-  feedback?: string;
-  createdAt: string;
-  updatedAt: string;
-  managerId: string;
-  property?: Property;
-  manager?: PoleManagerProfile;
-}
-
-// MaintenanceSession - Modèle EXACT du schema.prisma
-export interface MaintenanceSession {
-  id: string;
-  sessionNumber: string;
-  ticketId: string;
-  propertyId: string;
-  agentId: string;
-  scheduledDate: string;
-  startTime?: string;
-  endTime?: string;
-  estimatedDuration?: number;
-  actualDuration?: number;
-  status: SessionStatus;
-  notes?: string;
-  workDescription?: string;
-  agentNotes?: string;
-  laborCost?: number;
-  materialsCost?: number;
-  totalCost?: number;
-  ownerApproval?: boolean;
-  managerApproval?: boolean;
-  createdAt: string;
-  updatedAt: string;
-  managerId: string;
-  property?: Property;
-  manager?: PoleManagerProfile;
-}
-
-// Ticket - Modèle EXACT du schema.prisma
-export interface Ticket {
-  id: string;
-  ticketNumber: string;
-  title: string;
-  description: string;
-  status: TicketStatus;
-  priority: TicketPriority;
-  propertyId: string;
-  reportedBy: string; // "owner", "guest", "agent", "manager"
-  reportedAt: string;
-  agentId?: string;
-  assignedAt?: string;
-  category?: string; // "plumbing", "electrical", "heating"
-  issueType?: string; // "repair", "installation", "inspection"
-  roomLocation?: string; // "kitchen", "bathroom", "living_room"
-  resolution?: string;
-  resolvedAt?: string;
-  estimatedCost?: number;
-  estimatedDuration?: number;
-  createdAt: string;
-  updatedAt: string;
-  managerId: string;
-  property?: Property;
-  manager?: PoleManagerProfile;
-}
-
-// TaskAssignment - Modèle EXACT du schema.prisma
-export interface TaskAssignment {
-  id: string;
-  title: string;
-  description?: string;
-  type: string;
-  priority: string;
-  status: string;
-  assignedAt: string;
-  dueDate?: string;
-  startedAt?: string;
-  completedAt?: string;
-  agentId: string;
-  propertyId?: string;
-  reservationId?: string;
-  cleaningSessionId?: string;
-  maintenanceSessionId?: string;
-  ticketId?: string;
-  estimatedDuration?: number;
-  actualDuration?: number;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// AgentProfile - Modèle EXACT du schema.prisma
-export interface AgentProfile {
-  id: string;
-  userId: string;
-  agentType: AgentType;
-  availability: AgentAvailability;
-  employeeId?: string;
-
-  // Compétences
-  specialties: AgentSpecialty[];
-  certifications: string[];
-
-  // Localisation
-  currentLocation?: any; // Json?
-  serviceZones: string[];
-
-  // Statistiques
-  rating?: number;
-  completedTasks: number;
-  averageRating?: number;
-  responseTime?: number;
-
-  // Planning
-  workingHours?: any; // Json?
-  availabilityCalendar?: any; // Json?
-
-  // Informations contractuelles
-  hourlyRate?: number;
-  isActive: boolean;
-  hireDate?: string;
-
-  createdAt: string;
-  updatedAt: string;
-
-  // Manager qui le supervise
-  managerId: string;
-  manager?: PoleManagerProfile;
-
-  // User relation
-  user?: User;
-
-  // Tâches assignées
-  cleaningSessions?: CleaningSession[];
-  maintenanceSessions?: MaintenanceSession[];
-  tickets?: Ticket[];
-  taskAssignments?: TaskAssignment[];
-}
+import {
+  AgentType,
+  AgentAvailability,
+  AgentProfile,
+  AgentSpecialty,
+  TaskAssignment,
+  CleaningSession,
+  MaintenanceSession,
+  Ticket,
+} from "~/lib/types";
 
 // Types pour les opérations CRUD
 export interface CreateAgentData {
@@ -465,12 +251,12 @@ const STORAGE_KEYS = {
 };
 
 // Composant modal pour créer un agent
-const CreateAgentModal = ({ 
-  onClose, 
-  onSubmit 
-}: { 
-  onClose: () => void; 
-  onSubmit: (data: CreateAgentData) => void; 
+const CreateAgentModal = ({
+  onClose,
+  onSubmit,
+}: {
+  onClose: () => void;
+  onSubmit: (data: CreateAgentData) => void;
 }) => {
   const [formData, setFormData] = useState<CreateAgentData>({
     userId: "",
@@ -499,14 +285,19 @@ const CreateAgentModal = ({
   const [newServiceZone, setNewServiceZone] = useState("");
 
   const handleSubmit = () => {
-    if (!userInfo.name || !userInfo.email) {
+    if (
+      !userInfo.name ||
+      !userInfo.email ||
+      userInfo.email.trim().length === 0
+    ) {
       Alert.alert("Erreur", "Veuillez remplir tous les champs obligatoires");
       return;
     }
 
     const finalData = {
       ...formData,
-      userId: `user-${Date.now()}`, // Générer un ID utilisateur temporaire
+      email: userInfo.email,
+      name: userInfo.name,
     };
 
     onSubmit(finalData);
@@ -514,35 +305,38 @@ const CreateAgentModal = ({
 
   const addCertification = () => {
     if (newCertification.trim()) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        certifications: [...(prev.certifications || []), newCertification.trim()]
+        certifications: [
+          ...(prev.certifications || []),
+          newCertification.trim(),
+        ],
       }));
       setNewCertification("");
     }
   };
 
   const removeCertification = (index: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      certifications: prev.certifications?.filter((_, i) => i !== index) || []
+      certifications: prev.certifications?.filter((_, i) => i !== index) || [],
     }));
   };
 
   const addServiceZone = () => {
     if (newServiceZone.trim()) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        serviceZones: [...(prev.serviceZones || []), newServiceZone.trim()]
+        serviceZones: [...(prev.serviceZones || []), newServiceZone.trim()],
       }));
       setNewServiceZone("");
     }
   };
 
   const removeServiceZone = (index: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      serviceZones: prev.serviceZones?.filter((_, i) => i !== index) || []
+      serviceZones: prev.serviceZones?.filter((_, i) => i !== index) || [],
     }));
   };
 
@@ -554,18 +348,22 @@ const CreateAgentModal = ({
           <Text style={modalStyles.closeButtonText}>✕</Text>
         </TouchableOpacity>
       </View>
-      
+
       <ScrollView style={modalStyles.content}>
         {/* Informations utilisateur */}
         <View style={modalStyles.section}>
-          <Text style={modalStyles.sectionTitle}>Informations personnelles</Text>
-          
+          <Text style={modalStyles.sectionTitle}>
+            Informations personnelles
+          </Text>
+
           <View style={modalStyles.inputGroup}>
             <Text style={modalStyles.label}>Nom *</Text>
             <TextInput
               style={modalStyles.input}
               value={userInfo.name}
-              onChangeText={(text) => setUserInfo(prev => ({ ...prev, name: text }))}
+              onChangeText={(text) =>
+                setUserInfo((prev) => ({ ...prev, name: text }))
+              }
               placeholder="Nom complet"
             />
           </View>
@@ -575,7 +373,9 @@ const CreateAgentModal = ({
             <TextInput
               style={modalStyles.input}
               value={userInfo.email}
-              onChangeText={(text) => setUserInfo(prev => ({ ...prev, email: text }))}
+              onChangeText={(text) =>
+                setUserInfo((prev) => ({ ...prev, email: text }))
+              }
               placeholder="email@example.com"
               keyboardType="email-address"
             />
@@ -587,7 +387,9 @@ const CreateAgentModal = ({
               <TextInput
                 style={modalStyles.input}
                 value={userInfo.firstName}
-                onChangeText={(text) => setUserInfo(prev => ({ ...prev, firstName: text }))}
+                onChangeText={(text) =>
+                  setUserInfo((prev) => ({ ...prev, firstName: text }))
+                }
                 placeholder="Prénom"
               />
             </View>
@@ -596,7 +398,9 @@ const CreateAgentModal = ({
               <TextInput
                 style={modalStyles.input}
                 value={userInfo.lastName}
-                onChangeText={(text) => setUserInfo(prev => ({ ...prev, lastName: text }))}
+                onChangeText={(text) =>
+                  setUserInfo((prev) => ({ ...prev, lastName: text }))
+                }
                 placeholder="Nom de famille"
               />
             </View>
@@ -607,7 +411,9 @@ const CreateAgentModal = ({
             <TextInput
               style={modalStyles.input}
               value={userInfo.phone}
-              onChangeText={(text) => setUserInfo(prev => ({ ...prev, phone: text }))}
+              onChangeText={(text) =>
+                setUserInfo((prev) => ({ ...prev, phone: text }))
+              }
               placeholder="+33 6 12 34 56 78"
               keyboardType="phone-pad"
             />
@@ -617,13 +423,15 @@ const CreateAgentModal = ({
         {/* Informations agent */}
         <View style={modalStyles.section}>
           <Text style={modalStyles.sectionTitle}>Informations agent</Text>
-          
+
           <View style={modalStyles.inputGroup}>
             <Text style={modalStyles.label}>ID Employé</Text>
             <TextInput
               style={modalStyles.input}
               value={formData.employeeId}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, employeeId: text }))}
+              onChangeText={(text) =>
+                setFormData((prev) => ({ ...prev, employeeId: text }))
+              }
               placeholder="EMP001"
             />
           </View>
@@ -631,21 +439,38 @@ const CreateAgentModal = ({
           <View style={modalStyles.inputGroup}>
             <Text style={modalStyles.label}>Type d'agent *</Text>
             <View style={modalStyles.radioGroup}>
-              {(["cleaning", "maintenance", "laundry", "concierge", "multi_service"] as AgentType[]).map((type) => (
-                <TouchableOpacity 
+              {(
+                [
+                  "cleaning",
+                  "maintenance",
+                  "laundry",
+                  "concierge",
+                  "multi_service",
+                ] as AgentType[]
+              ).map((type) => (
+                <TouchableOpacity
                   key={type}
                   style={modalStyles.radioItem}
-                  onPress={() => setFormData(prev => ({ ...prev, agentType: type }))}
+                  onPress={() =>
+                    setFormData((prev) => ({ ...prev, agentType: type }))
+                  }
                 >
-                  <View style={[
-                    modalStyles.radioCircle,
-                    formData.agentType === type && modalStyles.radioSelected
-                  ]} />
+                  <View
+                    style={[
+                      modalStyles.radioCircle,
+                      formData.agentType === type && modalStyles.radioSelected,
+                    ]}
+                  />
                   <Text style={modalStyles.radioText}>
-                    {type === "cleaning" ? "Nettoyage" :
-                     type === "maintenance" ? "Maintenance" :
-                     type === "laundry" ? "Blanchisserie" :
-                     type === "concierge" ? "Conciergerie" : "Multi-service"}
+                    {type === "cleaning"
+                      ? "Nettoyage"
+                      : type === "maintenance"
+                      ? "Maintenance"
+                      : type === "laundry"
+                      ? "Blanchisserie"
+                      : type === "concierge"
+                      ? "Conciergerie"
+                      : "Multi-service"}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -655,21 +480,39 @@ const CreateAgentModal = ({
           <View style={modalStyles.inputGroup}>
             <Text style={modalStyles.label}>Disponibilité initiale</Text>
             <View style={modalStyles.radioGroup}>
-              {(["available", "busy", "offline", "on_break", "on_mission"] as AgentAvailability[]).map((availability) => (
-                <TouchableOpacity 
+              {(
+                [
+                  "available",
+                  "busy",
+                  "offline",
+                  "on_break",
+                  "on_mission",
+                ] as AgentAvailability[]
+              ).map((availability) => (
+                <TouchableOpacity
                   key={availability}
                   style={modalStyles.radioItem}
-                  onPress={() => setFormData(prev => ({ ...prev, availability }))}
+                  onPress={() =>
+                    setFormData((prev) => ({ ...prev, availability }))
+                  }
                 >
-                  <View style={[
-                    modalStyles.radioCircle,
-                    formData.availability === availability && modalStyles.radioSelected
-                  ]} />
+                  <View
+                    style={[
+                      modalStyles.radioCircle,
+                      formData.availability === availability &&
+                        modalStyles.radioSelected,
+                    ]}
+                  />
                   <Text style={modalStyles.radioText}>
-                    {availability === "available" ? "Disponible" :
-                     availability === "busy" ? "Occupé" :
-                     availability === "offline" ? "Hors ligne" :
-                     availability === "on_break" ? "En pause" : "En mission"}
+                    {availability === "available"
+                      ? "Disponible"
+                      : availability === "busy"
+                      ? "Occupé"
+                      : availability === "offline"
+                      ? "Hors ligne"
+                      : availability === "on_break"
+                      ? "En pause"
+                      : "En mission"}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -681,10 +524,12 @@ const CreateAgentModal = ({
             <TextInput
               style={modalStyles.input}
               value={formData.hourlyRate?.toString() || ""}
-              onChangeText={(text) => setFormData(prev => ({ 
-                ...prev, 
-                hourlyRate: text ? parseFloat(text) : undefined 
-              }))}
+              onChangeText={(text) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  hourlyRate: text ? parseFloat(text) : undefined,
+                }))
+              }
               placeholder="25.50"
               keyboardType="numeric"
             />
@@ -694,7 +539,7 @@ const CreateAgentModal = ({
         {/* Certifications */}
         <View style={modalStyles.section}>
           <Text style={modalStyles.sectionTitle}>Certifications</Text>
-          
+
           <View style={modalStyles.row}>
             <View style={modalStyles.flexInput}>
               <TextInput
@@ -732,7 +577,7 @@ const CreateAgentModal = ({
         {/* Zones de service */}
         <View style={modalStyles.section}>
           <Text style={modalStyles.sectionTitle}>Zones de service</Text>
-          
+
           <View style={modalStyles.row}>
             <View style={modalStyles.flexInput}>
               <TextInput
@@ -770,16 +615,22 @@ const CreateAgentModal = ({
         {/* Options */}
         <View style={modalStyles.section}>
           <Text style={modalStyles.sectionTitle}>Options</Text>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={modalStyles.checkboxItem}
-            onPress={() => setFormData(prev => ({ ...prev, isActive: !prev.isActive }))}
+            onPress={() =>
+              setFormData((prev) => ({ ...prev, isActive: !prev.isActive }))
+            }
           >
-            <View style={[
-              modalStyles.checkbox,
-              formData.isActive && modalStyles.checkboxSelected
-            ]}>
-              {formData.isActive && <Text style={modalStyles.checkboxIcon}>✓</Text>}
+            <View
+              style={[
+                modalStyles.checkbox,
+                formData.isActive && modalStyles.checkboxSelected,
+              ]}
+            >
+              {formData.isActive && (
+                <Text style={modalStyles.checkboxIcon}>✓</Text>
+              )}
             </View>
             <Text style={modalStyles.checkboxText}>Agent actif</Text>
           </TouchableOpacity>
@@ -790,7 +641,10 @@ const CreateAgentModal = ({
         <TouchableOpacity onPress={onClose} style={modalStyles.cancelButton}>
           <Text style={modalStyles.cancelButtonText}>Annuler</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleSubmit} style={modalStyles.submitButton}>
+        <TouchableOpacity
+          onPress={handleSubmit}
+          style={modalStyles.submitButton}
+        >
           <Text style={modalStyles.submitButtonText}>Créer</Text>
         </TouchableOpacity>
       </View>
@@ -1061,7 +915,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
         return null;
       }
     },
-    [session?.user?.id, state.agents, saveToStorage]
+    []
   );
 
   // Mettre à jour un agent
@@ -1903,7 +1757,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
   return (
     <AgentContext.Provider value={contextValue}>
       {children}
-      
+
       {/* Modal Créer Agent */}
       <Modal
         visible={showCreateAgentModal}
@@ -1911,11 +1765,13 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
         presentationStyle="pageSheet"
         onRequestClose={() => setShowCreateAgentModal(false)}
       >
-        <CreateAgentModal 
+        <CreateAgentModal
           onClose={() => setShowCreateAgentModal(false)}
-          onSubmit={(data) => {
-            createAgent(data);
-            setShowCreateAgentModal(false);
+          onSubmit={async (data) => {
+            const agent = await createAgent(data);
+            if (agent) {
+              setShowCreateAgentModal(false);
+            }
           }}
         />
       </Modal>

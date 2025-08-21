@@ -1,5 +1,12 @@
-import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from "react-native";
+import { CreateManagerModal } from "~/components/modals/ConciergerieModals";
+import {
+  AgentProfile,
+  PoleManagerProfile,
+  useAgents,
+} from "~/context/AgentContext";
+import { useConciergerie } from "~/context/ConciergerieContext";
 
 // Composant pour les statistiques
 const StatCard = ({
@@ -149,12 +156,15 @@ const ManagerCard = ({
       <View style={styles.managerInfo}>
         <Text style={styles.managerName}>
           {manager.user?.name || "Manager"}
+          {manager.isCurrentUser && (
+            <Text style={styles.currentUserLabel}> (Vous)</Text>
+          )}
         </Text>
         <Text style={styles.managerDescription} numberOfLines={2}>
-          Manager {manager.poleType}
+          Manager {manager.poleTypes ? manager.poleTypes.join(", ") : ""}
         </Text>
       </View>
-      <ManagerTypeBadge type={manager.poleType} />
+      <ManagerTypeBadge type={manager.poleTypes?.[0] || "conciergerie"} />
     </View>
     <View style={styles.managerFooter}>
       <Text style={styles.managerDate}>
@@ -215,31 +225,41 @@ const AgentCard = ({
   </TouchableOpacity>
 );
 
-export default function GestionPersonnel({
-  agents,
-  managers,
-  getAgentsStats,
-  getManagersStats,
-  setSelectedAgent,
-  setSelectedManager,
-  setShowCreateAgentModal,
-  setShowCreateManagerModal,
-  setShowAgentDetailsModal,
-  setShowManagerDetailsModal,
-}: {
-  agents: any[];
-  managers?: any[];
-  getAgentsStats: () => any;
-  getManagersStats?: () => any;
-  setSelectedAgent: (agent: any) => void;
-  setSelectedManager?: (manager: any) => void;
-  setShowCreateAgentModal: (show: boolean) => void;
-  setShowCreateManagerModal?: (show: boolean) => void;
-  setShowAgentDetailsModal: (show: boolean) => void;
-  setShowManagerDetailsModal?: (show: boolean) => void;
-}) {
+export default function GestionPersonnel() {
+  const { managers, createManager } = useConciergerie();
+
+  const { agents, setShowCreateAgentModal, getAgentsStats } = useAgents();
+  const [selectedAgent, setSelectedAgent] = useState<AgentProfile | null>(null);
+  const [selectedManager, setSelectedManager] =
+    useState<PoleManagerProfile | null>(null);
+  const [showAgentDetailsModal, setShowAgentDetailsModal] = useState(false);
+  const [showManagerDetailsModal, setShowManagerDetailsModal] = useState(false);
+  const [showCreateManagerModal, setShowCreateManagerModal] = useState(false);
   return (
     <View style={styles.personnelContainer}>
+      <Modal
+        visible={showCreateManagerModal}
+        onRequestClose={() => setShowCreateManagerModal(false)}
+      >
+        <CreateManagerModal
+          onClose={() => setShowCreateManagerModal(false)}
+          onCreateManager={async (data) => {
+            try {
+              const manager = await createManager(data);
+              if (manager) {
+                setShowCreateManagerModal(false);
+                return true;
+              }
+
+              return false;
+            } catch (err) {
+              // L'erreur est déjà gérée dans createManager
+              console.error("Erreur lors de la création du manager:", err);
+            }
+            return false;
+          }}
+        />
+      </Modal>
       {/* En-tête avec statistiques */}
       <View style={styles.personnelHeader}>
         <Text style={styles.sectionTitle}>Équipe de Conciergerie</Text>
@@ -279,7 +299,9 @@ export default function GestionPersonnel({
             <Text style={styles.sectionTitle}>Managers</Text>
             <TouchableOpacity
               style={styles.addManagerButton}
-              onPress={() => {}}
+              onPress={() =>
+                setShowCreateManagerModal && setShowCreateManagerModal(true)
+              }
             >
               <Text style={styles.addManagerButtonText}>+ Ajouter</Text>
             </TouchableOpacity>
@@ -291,7 +313,11 @@ export default function GestionPersonnel({
                 <ManagerCard
                   key={manager.id}
                   manager={manager}
-                  onPress={() => {}}
+                  onPress={() => {
+                    setSelectedManager && setSelectedManager(manager);
+                    setShowManagerDetailsModal &&
+                      setShowManagerDetailsModal(true);
+                  }}
                 />
               ))
             ) : (
@@ -636,5 +662,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#C7C7CC",
     textAlign: "center",
+  },
+  currentUserLabel: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#007AFF",
   },
 });

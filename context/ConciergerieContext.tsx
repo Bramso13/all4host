@@ -5,268 +5,28 @@ import React, {
   useEffect,
   useCallback,
 } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Modal,
-  TextInput,
-  ScrollView,
-  Alert,
-  SafeAreaView,
-} from "react-native";
+import { View, Text, Modal } from "react-native";
 import NoManagerScreen from "~/components/screen/conciergerie/NoManagerScreen";
 import { authClient } from "~/lib/auth-client";
+import {
+  CreateManagerModal,
+  CreatePropertyModal,
+  CreateReservationModal,
+} from "~/components/modals/ConciergerieModals";
+import {
+  Property,
+  PropertyOwnerProfile,
+  PoleManagerProfile,
+  Reservation,
+  PropertyFeature,
+  PropertyPhoto,
+  PropertyReview,
+  PropertyContract,
+} from "~/lib/types";
+import { ReservationStatus } from "~/lib/types";
 
-// Types EXACTS basés sur schema.prisma
-
-// Enums du schema.prisma
-export type PropertyStatus =
-  | "available"
-  | "occupied"
-  | "maintenance"
-  | "reserved"
-  | "offline";
-export type ReservationStatus =
-  | "confirmed"
-  | "pending"
-  | "cancelled"
-  | "completed"
-  | "in_progress"
-  | "checked_in"
-  | "checked_out";
-export type PoleType = "conciergerie" | "cleaning" | "maintenance" | "laundry";
-
-// Property - Modèle EXACT du schema.prisma
-export interface Property {
-  id: string;
-  name: string;
-  description: string;
-  status: PropertyStatus; // @default(available)
-
-  // Localisation
-  address: string;
-  city: string;
-  country: string; // @default("France")
-  postalCode?: string;
-  latitude?: number; // Float?
-  longitude?: number; // Float?
-
-  // Caractéristiques
-  surface?: number; // Float?
-  numberOfRooms?: number; // Int?
-  numberOfBedrooms?: number; // Int?
-  numberOfBathrooms?: number; // Int?
-  maxGuests?: number; // Int?
-  floor?: number; // Int?
-  hasElevator?: boolean;
-  hasParking?: boolean;
-  hasBalcony?: boolean;
-
-  // Pricing
-  pricePerNight?: number; // Float?
-  cleaningFee?: number; // Float?
-  serviceFee?: number; // Float?
-  securityDeposit?: number; // Float?
-
-  // Ratings
-  averageRating?: number; // Float? @default(0)
-  totalReviews: number; // Int @default(0)
-
-  // Policies
-  checkInTime?: string; // @default("15:00")
-  checkOutTime?: string; // @default("11:00")
-  cancellationPolicy?: string;
-  houseRules?: string;
-
-  // Instructions pour agents
-  accessInstructions?: string;
-  cleaningInstructions?: string;
-  maintenanceNotes?: string;
-
-  createdAt: string;
-  updatedAt: string;
-
-  // Relations
-  ownerId: string;
-  managerId?: string;
-
-  // Relations étendues (optionnelles pour le contexte)
-  owner?: PropertyOwnerProfile;
-  manager?: PoleManagerProfile;
-  features?: PropertyFeature[];
-  photos?: PropertyPhoto[];
-  reviews?: PropertyReview[];
-  reservations?: Reservation[];
-}
-
-// PropertyFeature - Modèle EXACT du schema.prisma
-export interface PropertyFeature {
-  id: string;
-  name: string;
-  icon?: string;
-  category?: string;
-  propertyId: string;
-}
-
-// PropertyPhoto - Modèle EXACT du schema.prisma
-export interface PropertyPhoto {
-  id: string;
-  url: string;
-  caption?: string;
-  isMain: boolean; // @default(false)
-  order: number; // @default(0)
-  type?: string;
-  propertyId: string;
-  createdAt: string;
-}
-
-// PropertyReview - Modèle EXACT du schema.prisma
-export interface PropertyReview {
-  id: string;
-  rating: number; // Float
-  comment?: string;
-  guestName: string;
-  guestEmail?: string;
-  propertyId: string;
-  createdAt: string;
-}
-
-// PropertyOwnerProfile - Modèle EXACT du schema.prisma
-export interface PropertyOwnerProfile {
-  id: string;
-  userId: string;
-
-  // Informations propriétaire
-  company?: string;
-  taxNumber?: string;
-
-  // Adresse
-  address?: string;
-  city?: string;
-  country?: string; // @default("France")
-  postal?: string;
-
-  // Préférences de communication
-  preferredContactMethod?: string; // @default("email")
-  receiveNotifications: boolean; // @default(true)
-
-  createdAt: string;
-  updatedAt: string;
-
-  // Relations étendues pour l'affichage
-  user?: {
-    name: string;
-    email: string;
-    phone?: string;
-  };
-  properties?: Property[];
-}
-
-// PoleManagerProfile - Modèle EXACT du schema.prisma
-export interface PoleManagerProfile {
-  id: string;
-  userId: string;
-  poleType: PoleType;
-
-  // Permissions spécifiques au pôle
-  canViewAnalytics: boolean;
-  canManageAgents: boolean;
-  canManageClients: boolean;
-  canManageBilling: boolean;
-
-  createdAt: string;
-  updatedAt: string;
-
-  // Relations
-  superAdminId: string;
-
-  // Relations étendues pour l'affichage
-  user?: {
-    name: string;
-    email: string;
-    phone?: string;
-  };
-}
-
-// Reservation - Modèle EXACT du schema.prisma
-export interface Reservation {
-  id: string;
-
-  // Relations principales
-  propertyId: string;
-  managerId: string;
-
-  // Informations invité
-  guestName: string;
-  guestEmail: string;
-  guestPhone?: string;
-  guestCount: number; // Int @default(1)
-
-  // Dates
-  checkIn: string; // DateTime
-  checkOut: string; // DateTime
-  nights: number; // Int
-
-  // Tarification
-  basePrice: number; // Float
-  cleaningFee?: number; // Float?
-  serviceFee?: number; // Float?
-  taxes?: number; // Float?
-  totalPrice: number; // Float
-
-  // Statut
-  status: ReservationStatus; // @default(pending)
-  notes?: string;
-
-  // Références
-  confirmationCode?: string; // @unique
-  bookingSource?: string; // "direct", "airbnb", "booking.com"
-
-  // Check-in/out
-  checkInTime?: string; // DateTime?
-  checkOutTime?: string; // DateTime?
-
-  createdAt: string;
-  updatedAt: string;
-
-  // Relations étendues (peuplées par le contexte)
-  property?: Property;
-  manager?: PoleManagerProfile;
-}
-
-// PropertyContract - Modèle EXACT du schema.prisma
-export interface PropertyContract {
-  id: string;
-  contractNumber: string; // @unique
-  type: string; // "property_management", "maintenance", "cleaning"
-  status: string; // @default("active")
-
-  startDate: string; // DateTime
-  endDate?: string; // DateTime?
-
-  // Relations
-  propertyId: string;
-  propertyOwnerId: string;
-
-  // Termes financiers
-  monthlyFee?: number; // Float?
-  commissionRate?: number; // Float?
-
-  // Documents
-  documentUrl?: string;
-  signedAt?: string; // DateTime?
-
-  createdAt: string;
-  updatedAt: string;
-
-  // Relations étendues
-  property?: Property;
-  propertyOwner?: PropertyOwnerProfile;
-}
-
-// Mock data alignées avec le schema.prisma
+// Mock data alignées avec le schema.prisma (commenté car on utilise maintenant les vraies API)
+/*
 const mockPropertyOwners: PropertyOwnerProfile[] = [
   {
     id: "1",
@@ -331,7 +91,7 @@ const mockPropertyManagers: PoleManagerProfile[] = [
   {
     id: "1",
     userId: "user-manager-1",
-    poleType: "conciergerie",
+    poleTypes: ["conciergerie"],
     canViewAnalytics: true,
     canManageAgents: true,
     canManageClients: true,
@@ -539,6 +299,9 @@ const mockReservations: Reservation[] = [
   },
 ];
 
+*/
+
+/*
 const mockPropertyFeatures: PropertyFeature[] = [
   // Features pour propriété 1
   {
@@ -690,840 +453,7 @@ const mockPropertyPhotos: PropertyPhoto[] = [
     createdAt: "2024-01-05T11:15:00Z",
   },
 ];
-
-// Composants modals
-const CreateManagerModal = ({
-  onClose,
-  onSubmit,
-}: {
-  onClose: () => void;
-  onSubmit: (
-    data: Omit<PoleManagerProfile, "id" | "createdAt" | "updatedAt">
-  ) => void;
-}) => {
-  const [formData, setFormData] = useState({
-    userId: "",
-    poleType: "conciergerie" as PoleType,
-    canViewAnalytics: true,
-    canManageAgents: true,
-    canManageClients: false,
-    canManageBilling: false,
-    superAdminId: "super-admin-1",
-    user: {
-      name: "",
-      email: "",
-      phone: "",
-    },
-  });
-
-  const handleSubmit = () => {
-    if (!formData.user.name || !formData.user.email) {
-      Alert.alert("Erreur", "Veuillez remplir tous les champs obligatoires");
-      return;
-    }
-    onSubmit(formData);
-  };
-
-  return (
-    <View style={modalStyles.container}>
-      <View style={modalStyles.header}>
-        <Text style={modalStyles.title}>Créer un Manager</Text>
-        <TouchableOpacity onPress={onClose} style={modalStyles.closeButton}>
-          <Text style={modalStyles.closeButtonText}>✕</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={modalStyles.content}>
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Nom *</Text>
-          <TextInput
-            style={modalStyles.input}
-            value={formData.user.name}
-            onChangeText={(text) =>
-              setFormData((prev) => ({
-                ...prev,
-                user: { ...prev.user, name: text },
-              }))
-            }
-            placeholder="Nom complet"
-          />
-        </View>
-
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Email *</Text>
-          <TextInput
-            style={modalStyles.input}
-            value={formData.user.email}
-            onChangeText={(text) =>
-              setFormData((prev) => ({
-                ...prev,
-                user: { ...prev.user, email: text },
-              }))
-            }
-            placeholder="email@example.com"
-            keyboardType="email-address"
-          />
-        </View>
-
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Téléphone</Text>
-          <TextInput
-            style={modalStyles.input}
-            value={formData.user.phone}
-            onChangeText={(text) =>
-              setFormData((prev) => ({
-                ...prev,
-                user: { ...prev.user, phone: text },
-              }))
-            }
-            placeholder="+33 6 12 34 56 78"
-            keyboardType="phone-pad"
-          />
-        </View>
-
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Pôle</Text>
-          <View style={modalStyles.radioGroup}>
-            {(
-              [
-                "conciergerie",
-                "cleaning",
-                "maintenance",
-                "laundry",
-              ] as PoleType[]
-            ).map((pole) => (
-              <TouchableOpacity
-                key={pole}
-                style={modalStyles.radioItem}
-                onPress={() =>
-                  setFormData((prev) => ({ ...prev, poleType: pole }))
-                }
-              >
-                <View
-                  style={[
-                    modalStyles.radioCircle,
-                    formData.poleType === pole && modalStyles.radioSelected,
-                  ]}
-                />
-                <Text style={modalStyles.radioText}>
-                  {pole === "conciergerie"
-                    ? "Conciergerie"
-                    : pole === "cleaning"
-                    ? "Nettoyage"
-                    : pole === "maintenance"
-                    ? "Maintenance"
-                    : "Blanchisserie"}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Permissions</Text>
-
-          <TouchableOpacity
-            style={modalStyles.checkboxItem}
-            onPress={() =>
-              setFormData((prev) => ({
-                ...prev,
-                canViewAnalytics: !prev.canViewAnalytics,
-              }))
-            }
-          >
-            <View
-              style={[
-                modalStyles.checkbox,
-                formData.canViewAnalytics && modalStyles.checkboxSelected,
-              ]}
-            >
-              {formData.canViewAnalytics && (
-                <Text style={modalStyles.checkboxIcon}>✓</Text>
-              )}
-            </View>
-            <Text style={modalStyles.checkboxText}>Voir les analytics</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={modalStyles.checkboxItem}
-            onPress={() =>
-              setFormData((prev) => ({
-                ...prev,
-                canManageAgents: !prev.canManageAgents,
-              }))
-            }
-          >
-            <View
-              style={[
-                modalStyles.checkbox,
-                formData.canManageAgents && modalStyles.checkboxSelected,
-              ]}
-            >
-              {formData.canManageAgents && (
-                <Text style={modalStyles.checkboxIcon}>✓</Text>
-              )}
-            </View>
-            <Text style={modalStyles.checkboxText}>Gérer les agents</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={modalStyles.checkboxItem}
-            onPress={() =>
-              setFormData((prev) => ({
-                ...prev,
-                canManageClients: !prev.canManageClients,
-              }))
-            }
-          >
-            <View
-              style={[
-                modalStyles.checkbox,
-                formData.canManageClients && modalStyles.checkboxSelected,
-              ]}
-            >
-              {formData.canManageClients && (
-                <Text style={modalStyles.checkboxIcon}>✓</Text>
-              )}
-            </View>
-            <Text style={modalStyles.checkboxText}>Gérer les clients</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={modalStyles.checkboxItem}
-            onPress={() =>
-              setFormData((prev) => ({
-                ...prev,
-                canManageBilling: !prev.canManageBilling,
-              }))
-            }
-          >
-            <View
-              style={[
-                modalStyles.checkbox,
-                formData.canManageBilling && modalStyles.checkboxSelected,
-              ]}
-            >
-              {formData.canManageBilling && (
-                <Text style={modalStyles.checkboxIcon}>✓</Text>
-              )}
-            </View>
-            <Text style={modalStyles.checkboxText}>Gérer la facturation</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      <View style={modalStyles.footer}>
-        <TouchableOpacity onPress={onClose} style={modalStyles.cancelButton}>
-          <Text style={modalStyles.cancelButtonText}>Annuler</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleSubmit}
-          style={modalStyles.submitButton}
-        >
-          <Text style={modalStyles.submitButtonText}>Créer</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
-
-const CreatePropertyModal = ({
-  onClose,
-  onSubmit,
-}: {
-  onClose: () => void;
-  onSubmit: (data: Omit<Property, "id" | "createdAt" | "updatedAt">) => void;
-}) => {
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    status: "available" as PropertyStatus,
-    address: "",
-    city: "",
-    country: "France",
-    postalCode: "",
-    latitude: undefined as number | undefined,
-    longitude: undefined as number | undefined,
-    surface: undefined as number | undefined,
-    numberOfRooms: undefined as number | undefined,
-    numberOfBedrooms: undefined as number | undefined,
-    numberOfBathrooms: undefined as number | undefined,
-    maxGuests: undefined as number | undefined,
-    floor: undefined as number | undefined,
-    hasElevator: false,
-    hasParking: false,
-    hasBalcony: false,
-    pricePerNight: undefined as number | undefined,
-    cleaningFee: undefined as number | undefined,
-    serviceFee: undefined as number | undefined,
-    securityDeposit: undefined as number | undefined,
-    totalReviews: 0,
-    averageRating: 0,
-    checkInTime: "15:00",
-    checkOutTime: "11:00",
-    cancellationPolicy: "",
-    houseRules: "",
-    accessInstructions: "",
-    cleaningInstructions: "",
-    maintenanceNotes: "",
-    ownerId: "1", // TODO: Sélectionner le propriétaire
-    managerId: "1", // TODO: Sélectionner le manager
-  });
-
-  const handleSubmit = () => {
-    if (!formData.name || !formData.address || !formData.city) {
-      Alert.alert("Erreur", "Veuillez remplir tous les champs obligatoires");
-      return;
-    }
-    onSubmit(formData);
-  };
-
-  return (
-    <View style={modalStyles.container}>
-      <View style={modalStyles.header}>
-        <Text style={modalStyles.title}>Créer une Propriété</Text>
-        <TouchableOpacity onPress={onClose} style={modalStyles.closeButton}>
-          <Text style={modalStyles.closeButtonText}>✕</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={modalStyles.content}>
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Nom *</Text>
-          <TextInput
-            style={modalStyles.input}
-            value={formData.name}
-            onChangeText={(text) =>
-              setFormData((prev) => ({ ...prev, name: text }))
-            }
-            placeholder="Nom de la propriété"
-          />
-        </View>
-
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Description *</Text>
-          <TextInput
-            style={[modalStyles.input, modalStyles.textArea]}
-            value={formData.description}
-            onChangeText={(text) =>
-              setFormData((prev) => ({ ...prev, description: text }))
-            }
-            placeholder="Description de la propriété"
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Adresse *</Text>
-          <TextInput
-            style={modalStyles.input}
-            value={formData.address}
-            onChangeText={(text) =>
-              setFormData((prev) => ({ ...prev, address: text }))
-            }
-            placeholder="Adresse complète"
-          />
-        </View>
-
-        <View style={modalStyles.row}>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Ville *</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.city}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, city: text }))
-              }
-              placeholder="Ville"
-            />
-          </View>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Code postal</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.postalCode}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, postalCode: text }))
-              }
-              placeholder="75001"
-              keyboardType="numeric"
-            />
-          </View>
-        </View>
-
-        <View style={modalStyles.row}>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Surface (m²)</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.surface?.toString() || ""}
-              onChangeText={(text) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  surface: text ? parseFloat(text) : undefined,
-                }))
-              }
-              placeholder="75"
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Nombre de pièces</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.numberOfRooms?.toString() || ""}
-              onChangeText={(text) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  numberOfRooms: text ? parseInt(text) : undefined,
-                }))
-              }
-              placeholder="3"
-              keyboardType="numeric"
-            />
-          </View>
-        </View>
-
-        <View style={modalStyles.row}>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Chambres</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.numberOfBedrooms?.toString() || ""}
-              onChangeText={(text) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  numberOfBedrooms: text ? parseInt(text) : undefined,
-                }))
-              }
-              placeholder="2"
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Salles de bain</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.numberOfBathrooms?.toString() || ""}
-              onChangeText={(text) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  numberOfBathrooms: text ? parseInt(text) : undefined,
-                }))
-              }
-              placeholder="1"
-              keyboardType="numeric"
-            />
-          </View>
-        </View>
-
-        <View style={modalStyles.row}>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Invités max</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.maxGuests?.toString() || ""}
-              onChangeText={(text) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  maxGuests: text ? parseInt(text) : undefined,
-                }))
-              }
-              placeholder="4"
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Prix/nuit (€)</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.pricePerNight?.toString() || ""}
-              onChangeText={(text) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  pricePerNight: text ? parseFloat(text) : undefined,
-                }))
-              }
-              placeholder="120"
-              keyboardType="numeric"
-            />
-          </View>
-        </View>
-
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Équipements</Text>
-
-          <TouchableOpacity
-            style={modalStyles.checkboxItem}
-            onPress={() =>
-              setFormData((prev) => ({
-                ...prev,
-                hasElevator: !prev.hasElevator,
-              }))
-            }
-          >
-            <View
-              style={[
-                modalStyles.checkbox,
-                formData.hasElevator && modalStyles.checkboxSelected,
-              ]}
-            >
-              {formData.hasElevator && (
-                <Text style={modalStyles.checkboxIcon}>✓</Text>
-              )}
-            </View>
-            <Text style={modalStyles.checkboxText}>Ascenseur</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={modalStyles.checkboxItem}
-            onPress={() =>
-              setFormData((prev) => ({ ...prev, hasParking: !prev.hasParking }))
-            }
-          >
-            <View
-              style={[
-                modalStyles.checkbox,
-                formData.hasParking && modalStyles.checkboxSelected,
-              ]}
-            >
-              {formData.hasParking && (
-                <Text style={modalStyles.checkboxIcon}>✓</Text>
-              )}
-            </View>
-            <Text style={modalStyles.checkboxText}>Parking</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={modalStyles.checkboxItem}
-            onPress={() =>
-              setFormData((prev) => ({ ...prev, hasBalcony: !prev.hasBalcony }))
-            }
-          >
-            <View
-              style={[
-                modalStyles.checkbox,
-                formData.hasBalcony && modalStyles.checkboxSelected,
-              ]}
-            >
-              {formData.hasBalcony && (
-                <Text style={modalStyles.checkboxIcon}>✓</Text>
-              )}
-            </View>
-            <Text style={modalStyles.checkboxText}>Balcon</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      <View style={modalStyles.footer}>
-        <TouchableOpacity onPress={onClose} style={modalStyles.cancelButton}>
-          <Text style={modalStyles.cancelButtonText}>Annuler</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleSubmit}
-          style={modalStyles.submitButton}
-        >
-          <Text style={modalStyles.submitButtonText}>Créer</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
-
-const CreateReservationModal = ({
-  onClose,
-  onSubmit,
-}: {
-  onClose: () => void;
-  onSubmit: (data: Omit<Reservation, "id" | "createdAt" | "updatedAt">) => void;
-}) => {
-  const [formData, setFormData] = useState({
-    propertyId: "",
-    managerId: "manager-1",
-    guestName: "",
-    guestEmail: "",
-    guestPhone: "",
-    guestCount: 1,
-    checkIn: "",
-    checkOut: "",
-    nights: 1,
-    basePrice: 0,
-    cleaningFee: 0,
-    serviceFee: 0,
-    taxes: 0,
-    totalPrice: 0,
-    status: "pending" as ReservationStatus,
-    notes: "",
-    confirmationCode: "",
-    bookingSource: "direct",
-  });
-
-  const handleSubmit = () => {
-    if (
-      !formData.propertyId ||
-      !formData.guestName ||
-      !formData.guestEmail ||
-      !formData.checkIn ||
-      !formData.checkOut
-    ) {
-      Alert.alert("Erreur", "Veuillez remplir tous les champs obligatoires");
-      return;
-    }
-
-    // Calculer les nuits et prix automatiquement
-    const checkInDate = new Date(formData.checkIn);
-    const checkOutDate = new Date(formData.checkOut);
-    const nights = Math.ceil(
-      (checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    if (nights <= 0) {
-      Alert.alert(
-        "Erreur",
-        "La date de départ doit être après la date d'arrivée"
-      );
-      return;
-    }
-
-    const basePrice = formData.basePrice * nights;
-    const totalPrice =
-      basePrice + formData.cleaningFee + formData.serviceFee + formData.taxes;
-
-    onSubmit({
-      ...formData,
-      nights,
-      basePrice,
-      totalPrice,
-      confirmationCode: formData.confirmationCode || `CNF${Date.now()}`,
-    });
-  };
-
-  return (
-    <View style={modalStyles.container}>
-      <View style={modalStyles.header}>
-        <Text style={modalStyles.title}>Créer une Réservation</Text>
-        <TouchableOpacity onPress={onClose} style={modalStyles.closeButton}>
-          <Text style={modalStyles.closeButtonText}>✕</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={modalStyles.content}>
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Propriété *</Text>
-          <TextInput
-            style={modalStyles.input}
-            value={formData.propertyId}
-            onChangeText={(text) =>
-              setFormData((prev) => ({ ...prev, propertyId: text }))
-            }
-            placeholder="ID de la propriété"
-          />
-        </View>
-
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Nom de l'invité *</Text>
-          <TextInput
-            style={modalStyles.input}
-            value={formData.guestName}
-            onChangeText={(text) =>
-              setFormData((prev) => ({ ...prev, guestName: text }))
-            }
-            placeholder="Nom complet"
-          />
-        </View>
-
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Email de l'invité *</Text>
-          <TextInput
-            style={modalStyles.input}
-            value={formData.guestEmail}
-            onChangeText={(text) =>
-              setFormData((prev) => ({ ...prev, guestEmail: text }))
-            }
-            placeholder="email@example.com"
-            keyboardType="email-address"
-          />
-        </View>
-
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Téléphone</Text>
-          <TextInput
-            style={modalStyles.input}
-            value={formData.guestPhone}
-            onChangeText={(text) =>
-              setFormData((prev) => ({ ...prev, guestPhone: text }))
-            }
-            placeholder="+33 6 12 34 56 78"
-            keyboardType="phone-pad"
-          />
-        </View>
-
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Nombre d'invités</Text>
-          <TextInput
-            style={modalStyles.input}
-            value={formData.guestCount.toString()}
-            onChangeText={(text) =>
-              setFormData((prev) => ({
-                ...prev,
-                guestCount: text ? parseInt(text) || 1 : 1,
-              }))
-            }
-            placeholder="1"
-            keyboardType="numeric"
-          />
-        </View>
-
-        <View style={modalStyles.row}>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Arrivée *</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.checkIn}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, checkIn: text }))
-              }
-              placeholder="2024-01-25T15:00:00Z"
-            />
-          </View>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Départ *</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.checkOut}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, checkOut: text }))
-              }
-              placeholder="2024-01-28T11:00:00Z"
-            />
-          </View>
-        </View>
-
-        <View style={modalStyles.row}>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Prix de base/nuit (€)</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.basePrice.toString()}
-              onChangeText={(text) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  basePrice: text ? parseFloat(text) || 0 : 0,
-                }))
-              }
-              placeholder="120"
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Frais de ménage (€)</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.cleaningFee.toString()}
-              onChangeText={(text) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  cleaningFee: text ? parseFloat(text) || 0 : 0,
-                }))
-              }
-              placeholder="30"
-              keyboardType="numeric"
-            />
-          </View>
-        </View>
-
-        <View style={modalStyles.row}>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Frais de service (€)</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.serviceFee.toString()}
-              onChangeText={(text) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  serviceFee: text ? parseFloat(text) || 0 : 0,
-                }))
-              }
-              placeholder="15"
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={modalStyles.halfWidth}>
-            <Text style={modalStyles.label}>Taxes (€)</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={formData.taxes.toString()}
-              onChangeText={(text) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  taxes: text ? parseFloat(text) || 0 : 0,
-                }))
-              }
-              placeholder="81"
-              keyboardType="numeric"
-            />
-          </View>
-        </View>
-
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Statut</Text>
-          <View style={modalStyles.radioGroup}>
-            {(["pending", "confirmed", "cancelled"] as ReservationStatus[]).map(
-              (status) => (
-                <TouchableOpacity
-                  key={status}
-                  style={modalStyles.radioItem}
-                  onPress={() => setFormData((prev) => ({ ...prev, status }))}
-                >
-                  <View
-                    style={[
-                      modalStyles.radioCircle,
-                      formData.status === status && modalStyles.radioSelected,
-                    ]}
-                  />
-                  <Text style={modalStyles.radioText}>
-                    {status === "pending"
-                      ? "En attente"
-                      : status === "confirmed"
-                      ? "Confirmée"
-                      : "Annulée"}
-                  </Text>
-                </TouchableOpacity>
-              )
-            )}
-          </View>
-        </View>
-
-        <View style={modalStyles.section}>
-          <Text style={modalStyles.label}>Notes</Text>
-          <TextInput
-            style={[modalStyles.input, modalStyles.textArea]}
-            value={formData.notes}
-            onChangeText={(text) =>
-              setFormData((prev) => ({ ...prev, notes: text }))
-            }
-            placeholder="Notes sur la réservation"
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-      </ScrollView>
-
-      <View style={modalStyles.footer}>
-        <TouchableOpacity onPress={onClose} style={modalStyles.cancelButton}>
-          <Text style={modalStyles.cancelButtonText}>Annuler</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleSubmit}
-          style={modalStyles.submitButton}
-        >
-          <Text style={modalStyles.submitButtonText}>Créer</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
+*/
 
 // Interface du contexte
 interface ConciergerieContextType {
@@ -1537,7 +467,7 @@ interface ConciergerieContextType {
   propertyPhotos: PropertyPhoto[];
   propertyReviews: PropertyReview[];
   contracts: PropertyContract[];
-  managers: PoleManagerProfile[];
+  managers: (PoleManagerProfile & { isCurrentUser?: boolean })[];
   stats: any;
 
   // États
@@ -1613,6 +543,8 @@ interface ConciergerieContextType {
 
   // Actions Manager
   fetchManager: () => Promise<void>;
+  fetchManagers: () => Promise<void>;
+  createManager: (managerData: any) => Promise<PoleManagerProfile>;
 }
 
 // Context
@@ -1632,15 +564,15 @@ export function ConciergerieProvider({
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(
     null
   );
-  const [properties, setProperties] = useState<Property[]>(mockProperties);
-  const [reservations, setReservations] =
-    useState<Reservation[]>(mockReservations);
-  const [propertyOwners, setPropertyOwners] =
-    useState<PropertyOwnerProfile[]>(mockPropertyOwners);
-  const [propertyFeatures, setPropertyFeatures] =
-    useState<PropertyFeature[]>(mockPropertyFeatures);
-  const [propertyPhotos, setPropertyPhotos] =
-    useState<PropertyPhoto[]>(mockPropertyPhotos);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [propertyOwners, setPropertyOwners] = useState<PropertyOwnerProfile[]>(
+    []
+  );
+  const [propertyFeatures, setPropertyFeatures] = useState<PropertyFeature[]>(
+    []
+  );
+  const [propertyPhotos, setPropertyPhotos] = useState<PropertyPhoto[]>([]);
   const [propertyReviews, setPropertyReviews] = useState<PropertyReview[]>([]);
   const [contracts, setContracts] = useState<PropertyContract[]>([]);
   const [managers, setManagers] = useState<PoleManagerProfile[]>([]);
@@ -1654,43 +586,80 @@ export function ConciergerieProvider({
   const [showCreateReservationModal, setShowCreateReservationModal] =
     useState(false);
 
+  const cookies = authClient.getCookie();
+  const headers = {
+    Cookie: cookies,
+  };
+
   // Actions Properties
   const fetchProperties = useCallback(async () => {
     setIsLoading(true);
     try {
-      // TODO: Appel API réel - GET /api/properties?managerId=X
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setProperties(mockProperties);
+      const response = await fetch("http://localhost:8081/api/properties", {
+        method: "GET",
+        headers,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "Erreur lors du chargement des propriétés"
+        );
+      }
+
+      const properties = await response.json();
+      setProperties(properties);
       setError(null);
     } catch (err) {
-      setError("Erreur lors du chargement des propriétés");
+      console.error("Erreur fetchProperties:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Erreur lors du chargement des propriétés"
+      );
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [headers]);
 
   const createProperty = useCallback(
     async (propertyData: Omit<Property, "id" | "createdAt" | "updatedAt">) => {
+      setIsLoading(true);
       try {
-        // TODO: Appel API réel - POST /api/properties
-        const newProperty: Property = {
-          ...propertyData,
-          id: Date.now().toString(),
-          totalReviews: 0,
-          averageRating: 0,
-          country: propertyData.country || "France",
-          checkInTime: propertyData.checkInTime || "15:00",
-          checkOutTime: propertyData.checkOutTime || "11:00",
-          status: propertyData.status || "available",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
+        const response = await fetch("http://localhost:8081/api/properties", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...headers,
+          },
+          body: JSON.stringify(propertyData),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.error || "Erreur lors de la création de la propriété"
+          );
+        }
+
+        const newProperty = await response.json();
         setProperties((prev) => [...prev, newProperty]);
+        setError(null);
+
+        return newProperty;
       } catch (err) {
-        setError("Erreur lors de la création de la propriété");
+        console.error("Erreur createProperty:", err);
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Erreur lors de la création de la propriété";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setIsLoading(false);
       }
     },
-    []
+    [headers]
   );
 
   const startOfToday = new Date();
@@ -1730,38 +699,88 @@ export function ConciergerieProvider({
 
   const updateProperty = useCallback(
     async (id: string, propertyData: Partial<Property>) => {
+      setIsLoading(true);
       try {
-        // TODO: Appel API réel - PUT /api/properties/:id
+        const response = await fetch("http://localhost:8081/api/properties", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            ...headers,
+          },
+          body: JSON.stringify({ id, ...propertyData }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.error || "Erreur lors de la mise à jour de la propriété"
+          );
+        }
+
+        const updatedProperty = await response.json();
         setProperties((prev) =>
           prev.map((property) =>
-            property.id === id
-              ? {
-                  ...property,
-                  ...propertyData,
-                  updatedAt: new Date().toISOString(),
-                }
-              : property
+            property.id === id ? updatedProperty : property
           )
         );
+        setError(null);
+
+        return updatedProperty;
       } catch (err) {
-        setError("Erreur lors de la mise à jour de la propriété");
+        console.error("Erreur updateProperty:", err);
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Erreur lors de la mise à jour de la propriété";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setIsLoading(false);
       }
     },
-    []
+    [headers]
   );
 
-  const deleteProperty = useCallback(async (id: string) => {
-    try {
-      // TODO: Appel API réel - DELETE /api/properties/:id
-      setProperties((prev) => prev.filter((property) => property.id !== id));
-      // Supprimer aussi les réservations associées
-      setReservations((prev) =>
-        prev.filter((reservation) => reservation.propertyId !== id)
-      );
-    } catch (err) {
-      setError("Erreur lors de la suppression de la propriété");
-    }
-  }, []);
+  const deleteProperty = useCallback(
+    async (id: string) => {
+      setIsLoading(true);
+      try {
+        const response = await fetch("http://localhost:8081/api/properties", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            ...headers,
+          },
+          body: JSON.stringify({ id }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.error || "Erreur lors de la suppression de la propriété"
+          );
+        }
+
+        setProperties((prev) => prev.filter((property) => property.id !== id));
+        // Supprimer aussi les réservations associées localement
+        setReservations((prev) =>
+          prev.filter((reservation) => reservation.propertyId !== id)
+        );
+        setError(null);
+      } catch (err) {
+        console.error("Erreur deleteProperty:", err);
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Erreur lors de la suppression de la propriété";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [headers]
+  );
 
   // Actions Reservations
   const fetchReservations = useCallback(async () => {
@@ -1769,7 +788,7 @@ export function ConciergerieProvider({
     try {
       // TODO: Appel API réel - GET /api/reservations?managerId=X
       await new Promise((resolve) => setTimeout(resolve, 1200));
-      setReservations(mockReservations);
+      setReservations([]);
       setError(null);
     } catch (err) {
       setError("Erreur lors du chargement des réservations");
@@ -1900,66 +919,165 @@ export function ConciergerieProvider({
   const fetchPropertyOwners = useCallback(async () => {
     setIsLoading(true);
     try {
-      // TODO: Appel API réel - GET /api/property-owners
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      setPropertyOwners(mockPropertyOwners);
+      const response = await fetch(
+        "http://localhost:8081/api/property-owners",
+        {
+          method: "GET",
+          headers,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "Erreur lors du chargement des propriétaires"
+        );
+      }
+
+      const propertyOwners = await response.json();
+      setPropertyOwners(propertyOwners);
       setError(null);
     } catch (err) {
-      setError("Erreur lors du chargement des propriétaires");
+      console.error("Erreur fetchPropertyOwners:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Erreur lors du chargement des propriétaires"
+      );
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [headers]);
 
   const createPropertyOwner = useCallback(
     async (
       ownerData: Omit<PropertyOwnerProfile, "id" | "createdAt" | "updatedAt">
     ) => {
+      setIsLoading(true);
       try {
-        // TODO: Appel API réel - POST /api/property-owners
-        const newOwner: PropertyOwnerProfile = {
-          ...ownerData,
-          id: Date.now().toString(),
-          country: ownerData.country || "France",
-          preferredContactMethod: ownerData.preferredContactMethod || "email",
-          receiveNotifications: ownerData.receiveNotifications ?? true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
+        const response = await fetch(
+          "http://localhost:8081/api/property-owners",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...headers,
+            },
+            body: JSON.stringify(ownerData),
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.error || "Erreur lors de la création du propriétaire"
+          );
+        }
+
+        const newOwner = await response.json();
         setPropertyOwners((prev) => [...prev, newOwner]);
+        setError(null);
+
+        return newOwner;
       } catch (err) {
-        setError("Erreur lors de la création du propriétaire");
+        console.error("Erreur createPropertyOwner:", err);
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Erreur lors de la création du propriétaire";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setIsLoading(false);
       }
     },
-    []
+    [headers]
   );
 
   const updatePropertyOwner = useCallback(
     async (id: string, ownerData: Partial<PropertyOwnerProfile>) => {
+      setIsLoading(true);
       try {
-        // TODO: Appel API réel - PUT /api/property-owners/:id
-        setPropertyOwners((prev) =>
-          prev.map((owner) =>
-            owner.id === id
-              ? { ...owner, ...ownerData, updatedAt: new Date().toISOString() }
-              : owner
-          )
+        const response = await fetch(
+          "http://localhost:8081/api/property-owners",
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              ...headers,
+            },
+            body: JSON.stringify({ id, ...ownerData }),
+          }
         );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.error || "Erreur lors de la mise à jour du propriétaire"
+          );
+        }
+
+        const updatedOwner = await response.json();
+        setPropertyOwners((prev) =>
+          prev.map((owner) => (owner.id === id ? updatedOwner : owner))
+        );
+        setError(null);
+
+        return updatedOwner;
       } catch (err) {
-        setError("Erreur lors de la mise à jour du propriétaire");
+        console.error("Erreur updatePropertyOwner:", err);
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Erreur lors de la mise à jour du propriétaire";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setIsLoading(false);
       }
     },
-    []
+    [headers]
   );
 
-  const deletePropertyOwner = useCallback(async (id: string) => {
-    try {
-      // TODO: Appel API réel - DELETE /api/property-owners/:id
-      setPropertyOwners((prev) => prev.filter((owner) => owner.id !== id));
-    } catch (err) {
-      setError("Erreur lors de la suppression du propriétaire");
-    }
-  }, []);
+  const deletePropertyOwner = useCallback(
+    async (id: string) => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(
+          "http://localhost:8081/api/property-owners",
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              ...headers,
+            },
+            body: JSON.stringify({ id }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.error || "Erreur lors de la suppression du propriétaire"
+          );
+        }
+
+        setPropertyOwners((prev) => prev.filter((owner) => owner.id !== id));
+        setError(null);
+      } catch (err) {
+        console.error("Erreur deletePropertyOwner:", err);
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Erreur lors de la suppression du propriétaire";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [headers]
+  );
 
   // Actions Features & Photos
   const fetchPropertyFeatures = useCallback(async () => {
@@ -1967,7 +1085,7 @@ export function ConciergerieProvider({
     try {
       // TODO: Appel API réel - GET /api/property-features
       await new Promise((resolve) => setTimeout(resolve, 600));
-      setPropertyFeatures(mockPropertyFeatures);
+      setPropertyFeatures([]);
       setError(null);
     } catch (err) {
       setError("Erreur lors du chargement des équipements");
@@ -2008,7 +1126,7 @@ export function ConciergerieProvider({
     try {
       // TODO: Appel API réel - GET /api/property-photos
       await new Promise((resolve) => setTimeout(resolve, 700));
-      setPropertyPhotos(mockPropertyPhotos);
+      setPropertyPhotos([]);
       setError(null);
     } catch (err) {
       setError("Erreur lors du chargement des photos");
@@ -2165,23 +1283,139 @@ export function ConciergerieProvider({
 
     setIsLoading(true);
     try {
-      // TODO: Appel API réel - GET /api/pole-managers?userId=X&poleType=conciergerie
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      setManagers([]);
+      const response = await fetch("http://localhost:8081/api/pole-managers", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...headers,
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 403) {
+          // L'utilisateur n'est pas super admin
+          setManager(null);
+          setManagers([]);
+          setError("Accès réservé aux super admins");
+          return;
+        }
+        throw new Error("Erreur lors de la récupération du manager");
+      }
+
+      const managerData = await response.json();
+
+      if (managerData) {
+        console.log("Manager data:", managerData);
+        setManager(managerData);
+        setManagers([managerData]);
+      } else {
+        setManager(null);
+        setManagers([]);
+      }
       setError(null);
     } catch (err) {
       setError("Erreur lors du chargement du manager");
+      console.error("Erreur fetchManager:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [session?.user]);
+  }, []);
+
+  const fetchManagers = useCallback(async () => {
+    if (!session?.user?.id) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch("http://localhost:8081/api/managers-list", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...headers,
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 403) {
+          // L'utilisateur n'est pas super admin
+          setManager(null);
+          setManagers([]);
+          setError("Accès réservé aux super admins");
+          return;
+        }
+        throw new Error("Erreur lors de la récupération des managers");
+      }
+
+      const data = await response.json();
+      const managersData = data.managers || [];
+
+      console.log("All Managers data:", managersData);
+
+      // Trouver le manager qui correspond à l'utilisateur connecté (lui-même)
+      const currentUserManager = managersData.find((m: any) => m.isCurrentUser);
+
+      setManagers(managersData);
+      setManager(currentUserManager || null);
+      setError(null);
+    } catch (err) {
+      setError("Erreur lors du chargement des managers");
+      console.error("Erreur fetchManagers:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [session?.user, headers]);
+
+  const createManager = async (managerData: any) => {
+    try {
+      setIsLoading(true);
+
+      const response = await fetch("http://localhost:8081/api/pole-managers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...headers,
+        },
+        body: JSON.stringify(managerData),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.log("Error creating manager:", error);
+        throw new Error(error.error || "Erreur lors de la création du manager");
+      }
+
+      const newManager = await response.json();
+      setManager(newManager);
+      setManagers([...managers, newManager]);
+      setError(null);
+
+      return newManager;
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Erreur lors de la création du manager";
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Chargement initial
   useEffect(() => {
     if (session?.user) {
       fetchManager();
+      fetchManagers();
     }
-  }, [session?.user, fetchManager]);
+  }, [session?.user]);
+
+  // Chargement des propriétés et propriétaires quand le manager est défini
+  useEffect(() => {
+    if (manager) {
+      fetchProperties();
+      fetchPropertyOwners();
+    }
+  }, [manager]);
 
   const contextValue: ConciergerieContextType = {
     // Data
@@ -2246,6 +1480,8 @@ export function ConciergerieProvider({
 
     // Actions Manager
     fetchManager,
+    fetchManagers,
+    createManager,
   };
 
   // Si pas de manager de conciergerie, afficher un message
@@ -2268,11 +1504,22 @@ export function ConciergerieProvider({
       >
         <CreateManagerModal
           onClose={() => setShowCreateManagerModal(false)}
-          onSubmit={(data) => {
-            // TODO: Créer le manager
-            console.log("Create manager:", data);
-            setShowCreateManagerModal(false);
+          onCreateManager={async (data) => {
+            try {
+              const manager = await createManager(data);
+              if (manager) {
+                setShowCreateManagerModal(false);
+                return true;
+              }
+
+              return false;
+            } catch (err) {
+              // L'erreur est déjà gérée dans createManager
+              console.error("Erreur lors de la création du manager:", err);
+            }
+            return false;
           }}
+          forAdmin={true}
         />
       </Modal>
 
@@ -2284,11 +1531,11 @@ export function ConciergerieProvider({
         onRequestClose={() => setShowCreatePropertyModal(false)}
       >
         <CreatePropertyModal
+          visible={showCreatePropertyModal}
           onClose={() => setShowCreatePropertyModal(false)}
-          onSubmit={(data) => {
-            createProperty(data);
-            setShowCreatePropertyModal(false);
-          }}
+          onCreateProperty={createProperty}
+          onCreatePropertyOwner={createPropertyOwner}
+          propertyOwners={propertyOwners}
         />
       </Modal>
 
@@ -2300,8 +1547,9 @@ export function ConciergerieProvider({
         onRequestClose={() => setShowCreateReservationModal(false)}
       >
         <CreateReservationModal
+          visible={showCreateReservationModal}
           onClose={() => setShowCreateReservationModal(false)}
-          onSubmit={(data) => {
+          onCreateReservation={(data) => {
             createReservation(data);
             setShowCreateReservationModal(false);
           }}
@@ -2321,159 +1569,6 @@ export function useConciergerie() {
   }
   return context;
 }
-
-// Styles pour les modals
-const modalStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F5F5",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E5E5",
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1C1C1E",
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#F2F2F7",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  closeButtonText: {
-    fontSize: 16,
-    color: "#8E8E93",
-    fontWeight: "600",
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1C1C1E",
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: "#1C1C1E",
-    borderWidth: 1,
-    borderColor: "#E5E5E5",
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: "top",
-  },
-  row: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 20,
-  },
-  halfWidth: {
-    flex: 1,
-  },
-  radioGroup: {
-    gap: 12,
-  },
-  radioItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  radioCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: "#C7C7CC",
-    marginRight: 12,
-  },
-  radioSelected: {
-    borderColor: "#007AFF",
-    backgroundColor: "#007AFF",
-  },
-  radioText: {
-    fontSize: 16,
-    color: "#1C1C1E",
-  },
-  checkboxItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: "#C7C7CC",
-    marginRight: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkboxSelected: {
-    borderColor: "#007AFF",
-    backgroundColor: "#007AFF",
-  },
-  checkboxIcon: {
-    fontSize: 12,
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  checkboxText: {
-    fontSize: 16,
-    color: "#1C1C1E",
-  },
-  footer: {
-    flexDirection: "row",
-    gap: 12,
-    padding: 20,
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#E5E5E5",
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: "#F2F2F7",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#8E8E93",
-  },
-  submitButton: {
-    flex: 1,
-    backgroundColor: "#007AFF",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-});
 
 // Alias pour compatibilité avec l'ancien contexte
 export const PropertyProvider = ConciergerieProvider;

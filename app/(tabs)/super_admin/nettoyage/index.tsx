@@ -11,11 +11,12 @@ import {
 import { authClient } from "~/lib/auth-client";
 import { useCleaning } from "~/context/CleaningContext";
 import { useAgentsByType } from "~/context/AgentContext";
+import { useConciergerie } from "~/context/ConciergerieContext";
 
 export default function NettoyageScreen() {
   const { data: session } = authClient.useSession();
+  const { properties } = useConciergerie();
   const {
-    properties,
     sessions,
     isLoading,
     error,
@@ -23,8 +24,8 @@ export default function NettoyageScreen() {
     createSession,
     updateSession,
   } = useCleaning();
-  
-  const cleaningAgents = useAgentsByType('cleaning');
+
+  const cleaningAgents = useAgentsByType("cleaning");
 
   const [activeTab, setActiveTab] = useState<
     "dashboard" | "sessions" | "agents"
@@ -32,6 +33,17 @@ export default function NettoyageScreen() {
   const [showCreateSessionModal, setShowCreateSessionModal] = useState(false);
   const [showAssignAgentModal, setShowAssignAgentModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState<any>(null);
+
+  // Form state for creating new session
+  const [formData, setFormData] = useState({
+    propertyId: "",
+    agentId: "",
+    scheduledDate: "",
+    duration: "",
+    cleaningType: "standard",
+    notes: "",
+  });
+  const [isCreating, setIsCreating] = useState(false);
 
   const getStatusConfig = (status: string) => {
     switch (status) {
@@ -76,23 +88,103 @@ export default function NettoyageScreen() {
     }
   };
 
+  const getChronoText = (startTime: Date | null) => {
+    if (!startTime) return "--:--";
+
+    const start = new Date(startTime);
+    const now = new Date();
+    const diffMs = now.getTime() - start.getTime();
+
+    if (diffMs < 0) return "--:--";
+
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}`;
+  };
+
+  const handleCreateSession = async () => {
+    if (
+      !formData.propertyId ||
+      !formData.agentId ||
+      !formData.scheduledDate ||
+      !formData.duration
+    ) {
+      alert("Veuillez remplir tous les champs obligatoires");
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      await createSession({
+        propertyId: formData.propertyId,
+        agentId: formData.agentId,
+        scheduledDate: new Date(formData.scheduledDate),
+        duration: parseInt(formData.duration),
+        cleaningType: formData.cleaningType,
+        notes: formData.notes || undefined,
+      });
+
+      // Reset form and close modal
+      setFormData({
+        propertyId: "",
+        agentId: "",
+        scheduledDate: "",
+        duration: "",
+        cleaningType: "standard",
+        notes: "",
+      });
+      setShowCreateSessionModal(false);
+
+      // Refresh sessions
+      await fetchSessions();
+    } catch (error) {
+      console.error("Erreur lors de la création de la session:", error);
+      alert("Erreur lors de la création de la session. Veuillez réessayer.");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleCloseCreateModal = () => {
+    setFormData({
+      propertyId: "",
+      agentId: "",
+      scheduledDate: "",
+      duration: "",
+      cleaningType: "standard",
+      notes: "",
+    });
+    setShowCreateSessionModal(false);
+  };
+
   const renderDashboard = () => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const todaySessions =
-      sessions?.filter(
-        (session) => session.scheduledDate?.split("T")[0] === today
-      ) || [];
+      sessions?.filter((session) => {
+        if (!session?.scheduledDate) return false;
+        const sessionDate = new Date(session.scheduledDate);
+        sessionDate.setHours(0, 0, 0, 0);
+        return sessionDate.getTime() === today.getTime();
+      }) || [];
     const sessionsInProgress = todaySessions.filter(
       (session) => session.status === "in_progress"
     ).length;
     const availableAgents =
-      cleaningAgents?.filter((agent) => agent.availability === "available").length || 0;
+      cleaningAgents?.filter((agent) => agent.availability === "available")
+        .length || 0;
     const totalAgents = cleaningAgents?.length || 0;
     const averageRating =
       cleaningAgents?.length > 0
         ? (
-            cleaningAgents.reduce((sum, agent) => sum + (agent.rating || 0), 0) /
-            cleaningAgents.length
+            cleaningAgents.reduce(
+              (sum, agent) => sum + (agent.rating || 0),
+              0
+            ) / cleaningAgents.length
           ).toFixed(1)
         : 0;
 
@@ -130,7 +222,7 @@ export default function NettoyageScreen() {
         {/* Sessions du jour */}
         <View style={styles.todaySessionsSection}>
           <Text style={styles.sectionTitle}>Sessions d'aujourd'hui</Text>
-          {todaySessions.length === 0 ? (
+          {!todaySessions || todaySessions.length === 0 ? (
             <View style={styles.emptyStateContainer}>
               <Text style={styles.emptyStateText}>
                 Aucune session prévue aujourd'hui
@@ -150,7 +242,7 @@ export default function NettoyageScreen() {
                         {session.property?.name || "Propriété non définie"}
                       </Text>
                       <Text style={styles.sessionAgent}>
-                        👤 {session.agent?.name || "Agent non assigné"}
+                        👤 {session.agent?.user?.name || "Agent non assigné"}
                       </Text>
                     </View>
                     <View
@@ -175,8 +267,10 @@ export default function NettoyageScreen() {
                     <View style={styles.sessionDetailRow}>
                       <Text style={styles.detailIcon}>🕐</Text>
                       <Text style={styles.detailText}>
-                        {session.scheduledTime || "Heure non définie"} (
-                        {session.duration || 0} min)
+                        {new Date(session.scheduledDate).toLocaleDateString(
+                          "fr-FR"
+                        )}{" "}
+                        ({session.duration || 0} min)
                       </Text>
                     </View>
                     <View style={styles.sessionDetailRow}>
@@ -186,10 +280,10 @@ export default function NettoyageScreen() {
                       </Text>
                     </View>
                     <View style={styles.sessionDetailRow}>
-                      <Text style={styles.detailIcon}>📋</Text>
+                      <Text style={styles.detailIcon}>⏱️</Text>
                       <Text style={styles.detailText}>
-                        {session.checklistCompleted || 0}/
-                        {session.checklistTotal || 0} tâches
+                        Chrono:{" "}
+                        {session.startTime && getChronoText(session.startTime)}
                       </Text>
                     </View>
                   </View>
@@ -198,7 +292,7 @@ export default function NettoyageScreen() {
                     <TouchableOpacity style={styles.actionButton}>
                       <Text style={styles.actionButtonText}>Détails</Text>
                     </TouchableOpacity>
-                    {session.status === "scheduled" && (
+                    {session.status === "planned" && (
                       <TouchableOpacity
                         style={[styles.actionButton, styles.primaryButton]}
                         onPress={() => {
@@ -251,24 +345,28 @@ export default function NettoyageScreen() {
         ) : (
           sessions.map((session) => {
             const statusConfig = getStatusConfig(session.status);
-            const progress =
-              (session.checklistTotal || 0) > 0
-                ? ((session.checklistCompleted || 0) / (session.checklistTotal || 0)) * 100
-                : 0;
+            const chronoText =
+              session.startTime && getChronoText(session.startTime);
 
             return (
               <View key={session.id} style={styles.sessionCard}>
                 <View style={styles.sessionHeader}>
                   <View style={styles.sessionInfo}>
                     <Text style={styles.sessionProperty}>
-                      {session.property?.name || 'Propriété non définie'}
+                      {session.property?.name || "Propriété non définie"}
                     </Text>
                     <Text style={styles.sessionDate}>
                       📅{" "}
-                      {session.scheduledDate ? new Date(session.scheduledDate).toLocaleDateString(
-                        "fr-FR"
-                      ) : 'Date non définie'}{" "}
-                      à {session.scheduledTime || 'Heure non définie'}
+                      {session.scheduledDate
+                        ? new Date(session.scheduledDate).toLocaleDateString(
+                            "fr-FR"
+                          )
+                        : "Date non définie"}{" "}
+                      à{" "}
+                      {session.scheduledDate &&
+                        new Date(session.scheduledDate).toLocaleTimeString(
+                          "fr-FR"
+                        )}
                     </Text>
                   </View>
                   <View
@@ -290,19 +388,23 @@ export default function NettoyageScreen() {
                   <View style={styles.agentInfo}>
                     <View style={styles.agentAvatar}>
                       <Text style={styles.agentAvatarText}>
-                        {session.agent.name.charAt(0)}
+                        {session.agent?.user?.name?.charAt(0)}
                       </Text>
                     </View>
                     <View>
-                      <Text style={styles.agentName}>{session.agent?.name || 'Agent non assigné'}</Text>
+                      <Text style={styles.agentName}>
+                        {session.agent?.user?.name || "Agent non assigné"}
+                      </Text>
                       <Text style={styles.agentPhone}>
-                        📱 {session.agent?.phone || 'Téléphone non renseigné'}
+                        📱{" "}
+                        {session.agent?.user?.phone ||
+                          "Téléphone non renseigné"}
                       </Text>
                     </View>
                   </View>
                   <View style={styles.agentRating}>
                     <Text style={styles.ratingText}>
-                      ⭐ {session.agent?.rating || 'N/A'}
+                      ⭐ {session.agent?.rating || "N/A"}
                     </Text>
                   </View>
                 </View>
@@ -310,16 +412,13 @@ export default function NettoyageScreen() {
                 {session.status === "in_progress" && (
                   <View style={styles.progressSection}>
                     <View style={styles.progressHeader}>
-                      <Text style={styles.progressTitle}>Progression</Text>
-                      <Text style={styles.progressText}>
-                        {session.checklistCompleted || 0}/{session.checklistTotal || 0}{" "}
-                        tâches
-                      </Text>
+                      <Text style={styles.progressTitle}>Temps écoulé</Text>
+                      <Text style={styles.progressText}>{chronoText}</Text>
                     </View>
-                    <View style={styles.progressBar}>
-                      <View
-                        style={[styles.progressFill, { width: `${progress}%` }]}
-                      />
+                    <View style={styles.chronoIndicator}>
+                      <Text style={styles.chronoText}>
+                        ⏱️ Intervention en cours
+                      </Text>
                     </View>
                   </View>
                 )}
@@ -328,25 +427,27 @@ export default function NettoyageScreen() {
                   <View style={styles.metaItem}>
                     <Text style={styles.metaIcon}>🏠</Text>
                     <Text style={styles.metaText}>
-                      {session.property?.rooms || 'N/A'} pièces
+                      {session.property?.numberOfRooms || "N/A"} pièces
                     </Text>
                   </View>
                   <View style={styles.metaItem}>
                     <Text style={styles.metaIcon}>📐</Text>
                     <Text style={styles.metaText}>
-                      {session.property?.surface || 'N/A'} m²
+                      {session.property?.surface || "N/A"} m²
                     </Text>
                   </View>
                   <View style={styles.metaItem}>
                     <Text style={styles.metaIcon}>⏱️</Text>
-                    <Text style={styles.metaText}>{session.duration || 0} min</Text>
+                    <Text style={styles.metaText}>
+                      {session.duration || 0} min
+                    </Text>
                   </View>
                   <View style={styles.metaItem}>
                     <Text style={styles.metaIcon}>🧹</Text>
                     <Text style={styles.metaText}>
-                      {session.type === "standard"
+                      {session.cleaningType === "standard"
                         ? "Standard"
-                        : session.type === "deep_clean"
+                        : session.cleaningType === "deep_clean"
                         ? "Approfondi"
                         : "Maintenance"}
                     </Text>
@@ -357,15 +458,7 @@ export default function NettoyageScreen() {
                   <TouchableOpacity style={styles.actionButton}>
                     <Text style={styles.actionButtonText}>Modifier</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => {
-                      setSelectedSession(session);
-                      setShowAssignAgentModal(true);
-                    }}
-                  >
-                    <Text style={styles.actionButtonText}>Réassigner</Text>
-                  </TouchableOpacity>
+
                   <TouchableOpacity
                     style={[styles.actionButton, styles.primaryButton]}
                   >
@@ -375,11 +468,7 @@ export default function NettoyageScreen() {
                         styles.primaryButtonText,
                       ]}
                     >
-                      {session.status === "scheduled"
-                        ? "Démarrer"
-                        : session.status === "in_progress"
-                        ? "Suivre"
-                        : "Rapport"}
+                      Assigner
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -420,15 +509,19 @@ export default function NettoyageScreen() {
                   <View style={styles.agentMainInfo}>
                     <View style={styles.agentAvatar}>
                       <Text style={styles.agentAvatarText}>
-                        {agent.user?.name?.charAt(0) || '?'}
+                        {agent.user?.name?.charAt(0) || "?"}
                       </Text>
                     </View>
                     <View style={styles.agentDetails}>
-                      <Text style={styles.agentName}>{agent.user?.name || 'Agent sans nom'}</Text>
+                      <Text style={styles.agentName}>
+                        {agent.user?.name || "Agent sans nom"}
+                      </Text>
                       <Text style={styles.agentExperience}>
                         💼 Expérience non renseignée
                       </Text>
-                      <Text style={styles.agentPhone}>📱 {agent.user?.phone || 'Téléphone non renseigné'}</Text>
+                      <Text style={styles.agentPhone}>
+                        📱 {agent.user?.phone || "Téléphone non renseigné"}
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.agentStatus}>
@@ -448,7 +541,9 @@ export default function NettoyageScreen() {
                       </Text>
                     </View>
                     <View style={styles.ratingContainer}>
-                      <Text style={styles.ratingText}>⭐ {agent.rating || 'N/A'}</Text>
+                      <Text style={styles.ratingText}>
+                        ⭐ {agent.rating || "N/A"}
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -489,9 +584,7 @@ export default function NettoyageScreen() {
                   </View>
                   <View style={styles.statItem}>
                     <Text style={styles.statValue}>
-                      {agent.responseTime
-                        ? `${agent.responseTime}min`
-                        : "N/A"}
+                      {agent.responseTime ? `${agent.responseTime}min` : "N/A"}
                     </Text>
                     <Text style={styles.statLabel}>Temps réponse</Text>
                   </View>
@@ -641,14 +734,16 @@ export default function NettoyageScreen() {
               <View style={styles.sessionSummary}>
                 <Text style={styles.summaryTitle}>Session sélectionnée</Text>
                 <Text style={styles.summaryProperty}>
-                  {selectedSession.property?.name || 'Propriété non définie'}
+                  {selectedSession.property?.name || "Propriété non définie"}
                 </Text>
                 <Text style={styles.summaryDate}>
                   📅{" "}
-                  {selectedSession.scheduledDate ? new Date(selectedSession.scheduledDate).toLocaleDateString(
-                    "fr-FR"
-                  ) : 'Date non définie'}{" "}
-                  à {selectedSession.scheduledTime || 'Heure non définie'}
+                  {selectedSession.scheduledDate
+                    ? new Date(
+                        selectedSession.scheduledDate
+                      ).toLocaleDateString("fr-FR")
+                    : "Date non définie"}{" "}
+                  à {selectedSession.scheduledTime || "Heure non définie"}
                 </Text>
               </View>
             )}
@@ -661,15 +756,19 @@ export default function NettoyageScreen() {
                   <View style={styles.agentSelectInfo}>
                     <View style={styles.agentAvatar}>
                       <Text style={styles.agentAvatarText}>
-                        {agent.user?.name?.charAt(0) || '?'}
+                        {agent.user?.name?.charAt(0) || "?"}
                       </Text>
                     </View>
                     <View>
-                      <Text style={styles.agentName}>{agent.user?.name || 'Agent sans nom'}</Text>
+                      <Text style={styles.agentName}>
+                        {agent.user?.name || "Agent sans nom"}
+                      </Text>
                       <Text style={styles.agentExperience}>
                         💼 Expérience non renseignée
                       </Text>
-                      <Text style={styles.agentRating}>⭐ {agent.rating || 'N/A'}</Text>
+                      <Text style={styles.agentRating}>
+                        ⭐ {agent.rating || "N/A"}
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.agentSelectButton}>
@@ -690,14 +789,23 @@ export default function NettoyageScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity
-              onPress={() => setShowCreateSessionModal(false)}
+              onPress={handleCloseCreateModal}
               style={styles.modalCloseButton}
             >
               <Text style={styles.modalCloseText}>Annuler</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Nouvelle session</Text>
-            <TouchableOpacity style={styles.modalSaveButton}>
-              <Text style={styles.modalSaveText}>Créer</Text>
+            <TouchableOpacity
+              style={[
+                styles.modalSaveButton,
+                isCreating && styles.disabledButton,
+              ]}
+              onPress={handleCreateSession}
+              disabled={isCreating}
+            >
+              <Text style={styles.modalSaveText}>
+                {isCreating ? "Création..." : "Créer"}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -705,14 +813,32 @@ export default function NettoyageScreen() {
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>Bien à nettoyer *</Text>
               <View style={styles.selectContainer}>
-                {properties.map((property) => (
+                {properties?.map((property) => (
                   <TouchableOpacity
                     key={property.id}
-                    style={styles.selectOption}
+                    style={[
+                      styles.selectOption,
+                      formData.propertyId === property.id &&
+                        styles.selectOptionSelected,
+                    ]}
+                    onPress={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        propertyId: property.id,
+                      }))
+                    }
                   >
-                    <Text style={styles.selectOptionText}>{property.name || 'Propriété sans nom'}</Text>
+                    <Text
+                      style={[
+                        styles.selectOptionText,
+                        formData.propertyId === property.id &&
+                          styles.selectOptionTextSelected,
+                      ]}
+                    >
+                      {property.name || "Propriété sans nom"}
+                    </Text>
                     <Text style={styles.selectOptionSubtext}>
-                      {property.address || 'Adresse non définie'}
+                      {property.address || "Adresse non définie"}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -723,8 +849,12 @@ export default function NettoyageScreen() {
               <Text style={styles.formLabel}>Date et heure *</Text>
               <TextInput
                 style={styles.formInput}
-                placeholder="15/02/2024 - 09:00"
+                placeholder="2024-02-15T09:00"
                 placeholderTextColor="#8E8E93"
+                value={formData.scheduledDate}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, scheduledDate: text }))
+                }
               />
             </View>
 
@@ -735,26 +865,115 @@ export default function NettoyageScreen() {
                 placeholder="120"
                 placeholderTextColor="#8E8E93"
                 keyboardType="numeric"
+                value={formData.duration}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, duration: text }))
+                }
               />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Agent assigné *</Text>
+              <View style={styles.selectContainer}>
+                {cleaningAgents
+                  ?.filter((agent) => agent.availability === "available")
+                  .map((agent) => (
+                    <TouchableOpacity
+                      key={agent.id}
+                      style={[
+                        styles.selectOption,
+                        formData.agentId === agent.id &&
+                          styles.selectOptionSelected,
+                      ]}
+                      onPress={() =>
+                        setFormData((prev) => ({ ...prev, agentId: agent.id }))
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.selectOptionText,
+                          formData.agentId === agent.id &&
+                            styles.selectOptionTextSelected,
+                        ]}
+                      >
+                        {agent.user?.name || "Agent sans nom"}
+                      </Text>
+                      <Text style={styles.selectOptionSubtext}>
+                        ⭐ {agent.rating || "N/A"} •{" "}
+                        {agent.user?.phone || "Pas de téléphone"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+              </View>
             </View>
 
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>Type de nettoyage *</Text>
               <View style={styles.typeSelector}>
                 <TouchableOpacity
-                  style={[styles.typeOption, styles.typeOptionActive]}
+                  style={[
+                    styles.typeOption,
+                    formData.cleaningType === "standard" &&
+                      styles.typeOptionActive,
+                  ]}
+                  onPress={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      cleaningType: "standard",
+                    }))
+                  }
                 >
                   <Text
-                    style={[styles.typeOptionText, styles.typeOptionTextActive]}
+                    style={[
+                      styles.typeOptionText,
+                      formData.cleaningType === "standard" &&
+                        styles.typeOptionTextActive,
+                    ]}
                   >
                     Standard
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.typeOption}>
-                  <Text style={styles.typeOptionText}>Approfondi</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.typeOption,
+                    formData.cleaningType === "deep" && styles.typeOptionActive,
+                  ]}
+                  onPress={() =>
+                    setFormData((prev) => ({ ...prev, cleaningType: "deep" }))
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.typeOptionText,
+                      formData.cleaningType === "deep" &&
+                        styles.typeOptionTextActive,
+                    ]}
+                  >
+                    Approfondi
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.typeOption}>
-                  <Text style={styles.typeOptionText}>Maintenance</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.typeOption,
+                    formData.cleaningType === "maintenance" &&
+                      styles.typeOptionActive,
+                  ]}
+                  onPress={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      cleaningType: "maintenance",
+                    }))
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.typeOptionText,
+                      formData.cleaningType === "maintenance" &&
+                        styles.typeOptionTextActive,
+                    ]}
+                  >
+                    Maintenance
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -767,6 +986,10 @@ export default function NettoyageScreen() {
                 placeholderTextColor="#8E8E93"
                 multiline
                 numberOfLines={4}
+                value={formData.notes}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, notes: text }))
+                }
               />
             </View>
           </ScrollView>
@@ -1033,7 +1256,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Styles pour la progression
+  // Styles pour le chrono
   progressSection: {
     marginBottom: 16,
   },
@@ -1049,19 +1272,22 @@ const styles = StyleSheet.create({
     color: "#1C1C1E",
   },
   progressText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#007AFF",
+    fontFamily: "monospace",
+  },
+  chronoIndicator: {
+    backgroundColor: "#E3F2FD",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  chronoText: {
     fontSize: 12,
-    color: "#8E8E93",
-  },
-  progressBar: {
-    height: 6,
-    backgroundColor: "#F2F2F7",
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: "#4CAF50",
-    borderRadius: 3,
+    color: "#2196F3",
+    fontWeight: "600",
   },
 
   // Styles pour les métadonnées de session
@@ -1332,6 +1558,16 @@ const styles = StyleSheet.create({
   selectOptionSubtext: {
     fontSize: 14,
     color: "#8E8E93",
+  },
+  selectOptionSelected: {
+    backgroundColor: "#E3F2FD",
+    borderColor: "#2196F3",
+  },
+  selectOptionTextSelected: {
+    color: "#2196F3",
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
   typeSelector: {
     flexDirection: "row",

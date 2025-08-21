@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import React, {
   createContext,
@@ -149,37 +149,37 @@ export interface MyAgentProfile {
   agentType: AgentType;
   availability: AgentAvailability;
   employeeId?: string;
-  
+
   // Compétences
   specialties: AgentSpecialty[];
   certifications: string[];
-  
+
   // Localisation
   currentLocation?: any;
   serviceZones: string[];
-  
+
   // Statistiques
   rating?: number;
   completedTasks: number;
   averageRating?: number;
   responseTime?: number;
-  
+
   // Planning
   workingHours?: any;
   availabilityCalendar?: any;
-  
+
   // Informations contractuelles (lecture seule pour l'agent)
   hourlyRate?: number;
   isActive: boolean;
   hireDate?: string;
-  
+
   createdAt: string;
   updatedAt: string;
-  
+
   // Relations
   managerId: string;
   user?: User;
-  
+
   // Tâches et sessions assignées
   cleaningSessions?: CleaningSession[];
   maintenanceSessions?: MaintenanceSession[];
@@ -191,14 +191,14 @@ export interface MyAgentProfile {
 interface AgentProfileState {
   // Profil de l'agent connecté
   myProfile: MyAgentProfile | null;
-  
+
   // Tâches et sessions de l'agent
   myTasks: TaskAssignment[];
   myCleaningSessions: CleaningSession[];
   myMaintenanceSessions: MaintenanceSession[];
   myTickets: Ticket[];
   mySpecialties: AgentSpecialty[];
-  
+
   // État
   isLoading: boolean;
   error: string | null;
@@ -217,7 +217,7 @@ interface AgentProfileActions {
     workingHours?: any;
     availabilityCalendar?: any;
   }) => Promise<void>;
-  
+
   // Mes spécialités
   loadMySpecialties: () => Promise<void>;
   addMySpecialty: (data: {
@@ -226,32 +226,47 @@ interface AgentProfileActions {
     level?: string;
     certified?: boolean;
   }) => Promise<void>;
-  updateMySpecialty: (id: string, data: {
-    name?: string;
-    category?: string;
-    level?: string;
-    certified?: boolean;
-  }) => Promise<void>;
+  updateMySpecialty: (
+    id: string,
+    data: {
+      name?: string;
+      category?: string;
+      level?: string;
+      certified?: boolean;
+    }
+  ) => Promise<void>;
   removeMySpecialty: (id: string) => Promise<void>;
-  
+
   // Mes tâches
   loadMyTasks: () => Promise<void>;
   startMyTask: (taskId: string) => Promise<void>;
   completeMyTask: (taskId: string, notes?: string) => Promise<void>;
   updateMyTaskNotes: (taskId: string, notes: string) => Promise<void>;
-  
+
   // Mes sessions de nettoyage
   loadMyCleaningSessions: () => Promise<void>;
   startCleaningSession: (sessionId: string) => Promise<void>;
-  completeCleaningSession: (sessionId: string, agentNotes?: string) => Promise<void>;
-  updateCleaningSessionStatus: (sessionId: string, status: SessionStatus) => Promise<void>;
-  
+  completeCleaningSession: (
+    sessionId: string,
+    agentNotes?: string
+  ) => Promise<void>;
+  updateCleaningSessionStatus: (
+    sessionId: string,
+    status: SessionStatus
+  ) => Promise<void>;
+
   // Mes sessions de maintenance
   loadMyMaintenanceSessions: () => Promise<void>;
   startMaintenanceSession: (sessionId: string) => Promise<void>;
-  completeMaintenanceSession: (sessionId: string, agentNotes?: string) => Promise<void>;
-  updateMaintenanceSessionStatus: (sessionId: string, status: SessionStatus) => Promise<void>;
-  
+  completeMaintenanceSession: (
+    sessionId: string,
+    agentNotes?: string
+  ) => Promise<void>;
+  updateMaintenanceSessionStatus: (
+    sessionId: string,
+    status: SessionStatus
+  ) => Promise<void>;
+
   // Mes tickets
   loadMyTickets: () => Promise<void>;
   createTicket: (data: {
@@ -264,9 +279,13 @@ interface AgentProfileActions {
     priority?: TicketPriority;
   }) => Promise<void>;
   acceptTicket: (ticketId: string) => Promise<void>;
-  updateTicketStatus: (ticketId: string, status: TicketStatus, resolution?: string) => Promise<void>;
+  updateTicketStatus: (
+    ticketId: string,
+    status: TicketStatus,
+    resolution?: string
+  ) => Promise<void>;
   resolveTicket: (ticketId: string, resolution: string) => Promise<void>;
-  
+
   // Statistiques personnelles
   getMyStats: () => {
     completedTasks: number;
@@ -275,7 +294,7 @@ interface AgentProfileActions {
     upcomingSessions: number;
     openTickets: number;
   };
-  
+
   // Gestion des données
   refreshAll: () => Promise<void>;
   clearCache: () => Promise<void>;
@@ -413,8 +432,12 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const myProfile = profileData ? JSON.parse(profileData) : null;
       const myTasks = tasksData ? JSON.parse(tasksData) : [];
-      const myCleaningSessions = cleaningSessionsData ? JSON.parse(cleaningSessionsData) : [];
-      const myMaintenanceSessions = maintenanceSessionsData ? JSON.parse(maintenanceSessionsData) : [];
+      const myCleaningSessions = cleaningSessionsData
+        ? JSON.parse(cleaningSessionsData)
+        : [];
+      const myMaintenanceSessions = maintenanceSessionsData
+        ? JSON.parse(maintenanceSessionsData)
+        : [];
       const myTickets = ticketsData ? JSON.parse(ticketsData) : [];
       const mySpecialties = specialtiesData ? JSON.parse(specialtiesData) : [];
       const lastSync = lastSyncData ? new Date(lastSyncData) : null;
@@ -441,10 +464,13 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const response = await fetch(`http://localhost:8081/api/agents/my-profile`, {
-        method: "GET",
-        headers,
-      });
+      const response = await fetch(
+        `http://localhost:8081/api/agents/my-profile`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
 
       if (response.ok) {
         const myProfile = await response.json();
@@ -469,11 +495,14 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
       if (!state.myProfile) return;
 
       try {
-        const response = await fetch(`http://localhost:8081/api/agents/my-profile`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({ availability }),
-        });
+        const response = await fetch(
+          `http://localhost:8081/api/agents/my-profile`,
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({ availability }),
+          }
+        );
 
         if (response.ok) {
           const updatedProfile = await response.json();
@@ -493,11 +522,14 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
       if (!state.myProfile) return;
 
       try {
-        const response = await fetch(`http://localhost:8081/api/agents/my-profile`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({ currentLocation: location }),
-        });
+        const response = await fetch(
+          `http://localhost:8081/api/agents/my-profile`,
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({ currentLocation: location }),
+          }
+        );
 
         if (response.ok) {
           const updatedProfile = await response.json();
@@ -522,11 +554,14 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
       if (!state.myProfile) return;
 
       try {
-        const response = await fetch(`http://localhost:8081/api/agents/my-profile`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify(data),
-        });
+        const response = await fetch(
+          `http://localhost:8081/api/agents/my-profile`,
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify(data),
+          }
+        );
 
         if (response.ok) {
           const updatedProfile = await response.json();
@@ -545,10 +580,13 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!session?.user?.id) return;
 
     try {
-      const response = await fetch(`http://localhost:8081/api/agents/my-tasks`, {
-        method: "GET",
-        headers,
-      });
+      const response = await fetch(
+        `http://localhost:8081/api/agents/my-tasks`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
 
       if (response.ok) {
         const myTasks = await response.json();
@@ -561,65 +599,68 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [session?.user?.id, saveToStorage]);
 
   // Démarrer une tâche
-  const startMyTask = useCallback(
-    async (taskId: string) => {
-      try {
-        const response = await fetch(`http://localhost:8081/api/task-assignments/${taskId}/start`, {
+  const startMyTask = useCallback(async (taskId: string) => {
+    try {
+      const response = await fetch(
+        `http://localhost:8081/api/task-assignments/${taskId}/start`,
+        {
           method: "PATCH",
           headers,
-        });
-
-        if (response.ok) {
-          const updatedTask = await response.json();
-          setState((prev) => ({
-            ...prev,
-            myTasks: prev.myTasks.map((task) =>
-              task.id === taskId ? updatedTask : task
-            ),
-          }));
         }
-      } catch (error) {
-        console.error("Erreur démarrage tâche:", error);
+      );
+
+      if (response.ok) {
+        const updatedTask = await response.json();
+        setState((prev) => ({
+          ...prev,
+          myTasks: prev.myTasks.map((task) =>
+            task.id === taskId ? updatedTask : task
+          ),
+        }));
       }
-    },
-    []
-  );
+    } catch (error) {
+      console.error("Erreur démarrage tâche:", error);
+    }
+  }, []);
 
   // Compléter une tâche
-  const completeMyTask = useCallback(
-    async (taskId: string, notes?: string) => {
-      try {
-        const response = await fetch(`http://localhost:8081/api/task-assignments/${taskId}/complete`, {
+  const completeMyTask = useCallback(async (taskId: string, notes?: string) => {
+    try {
+      const response = await fetch(
+        `http://localhost:8081/api/task-assignments/${taskId}/complete`,
+        {
           method: "PATCH",
           headers,
           body: JSON.stringify({ notes }),
-        });
-
-        if (response.ok) {
-          const updatedTask = await response.json();
-          setState((prev) => ({
-            ...prev,
-            myTasks: prev.myTasks.map((task) =>
-              task.id === taskId ? updatedTask : task
-            ),
-          }));
         }
-      } catch (error) {
-        console.error("Erreur completion tâche:", error);
+      );
+
+      if (response.ok) {
+        const updatedTask = await response.json();
+        setState((prev) => ({
+          ...prev,
+          myTasks: prev.myTasks.map((task) =>
+            task.id === taskId ? updatedTask : task
+          ),
+        }));
       }
-    },
-    []
-  );
+    } catch (error) {
+      console.error("Erreur completion tâche:", error);
+    }
+  }, []);
 
   // Mettre à jour les notes d'une tâche
   const updateMyTaskNotes = useCallback(
     async (taskId: string, notes: string) => {
       try {
-        const response = await fetch(`http://localhost:8081/api/task-assignments/${taskId}`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({ notes }),
-        });
+        const response = await fetch(
+          `http://localhost:8081/api/task-assignments/${taskId}`,
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({ notes }),
+          }
+        );
 
         if (response.ok) {
           const updatedTask = await response.json();
@@ -642,10 +683,13 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!session?.user?.id) return;
 
     try {
-      const response = await fetch(`http://localhost:8081/api/agents/my-cleaning-sessions`, {
-        method: "GET",
-        headers,
-      });
+      const response = await fetch(
+        `http://localhost:8081/api/agents/my-cleaning-sessions`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
 
       if (response.ok) {
         const myCleaningSessions = await response.json();
@@ -658,39 +702,42 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [session?.user?.id, saveToStorage]);
 
   // Démarrer une session de nettoyage
-  const startCleaningSession = useCallback(
-    async (sessionId: string) => {
-      try {
-        const response = await fetch(`http://localhost:8081/api/cleaning-sessions/${sessionId}/start`, {
+  const startCleaningSession = useCallback(async (sessionId: string) => {
+    try {
+      const response = await fetch(
+        `http://localhost:8081/api/cleaning-sessions/${sessionId}/start`,
+        {
           method: "PATCH",
           headers,
-        });
-
-        if (response.ok) {
-          const updatedSession = await response.json();
-          setState((prev) => ({
-            ...prev,
-            myCleaningSessions: prev.myCleaningSessions.map((session) =>
-              session.id === sessionId ? updatedSession : session
-            ),
-          }));
         }
-      } catch (error) {
-        console.error("Erreur démarrage session nettoyage:", error);
+      );
+
+      if (response.ok) {
+        const updatedSession = await response.json();
+        setState((prev) => ({
+          ...prev,
+          myCleaningSessions: prev.myCleaningSessions.map((session) =>
+            session.id === sessionId ? updatedSession : session
+          ),
+        }));
       }
-    },
-    []
-  );
+    } catch (error) {
+      console.error("Erreur démarrage session nettoyage:", error);
+    }
+  }, []);
 
   // Compléter une session de nettoyage
   const completeCleaningSession = useCallback(
     async (sessionId: string, agentNotes?: string) => {
       try {
-        const response = await fetch(`http://localhost:8081/api/cleaning-sessions/${sessionId}/complete`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({ agentNotes }),
-        });
+        const response = await fetch(
+          `http://localhost:8081/api/cleaning-sessions/${sessionId}/complete`,
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({ agentNotes }),
+          }
+        );
 
         if (response.ok) {
           const updatedSession = await response.json();
@@ -712,11 +759,14 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
   const updateCleaningSessionStatus = useCallback(
     async (sessionId: string, status: SessionStatus) => {
       try {
-        const response = await fetch(`http://localhost:8081/api/cleaning-sessions/${sessionId}`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({ status }),
-        });
+        const response = await fetch(
+          `http://localhost:8081/api/cleaning-sessions/${sessionId}`,
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({ status }),
+          }
+        );
 
         if (response.ok) {
           const updatedSession = await response.json();
@@ -739,10 +789,13 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!session?.user?.id) return;
 
     try {
-      const response = await fetch(`http://localhost:8081/api/agents/my-maintenance-sessions`, {
-        method: "GET",
-        headers,
-      });
+      const response = await fetch(
+        `http://localhost:8081/api/agents/my-maintenance-sessions`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
 
       if (response.ok) {
         const myMaintenanceSessions = await response.json();
@@ -755,39 +808,42 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [session?.user?.id, saveToStorage]);
 
   // Démarrer une session de maintenance
-  const startMaintenanceSession = useCallback(
-    async (sessionId: string) => {
-      try {
-        const response = await fetch(`http://localhost:8081/api/maintenance-sessions/${sessionId}/start`, {
+  const startMaintenanceSession = useCallback(async (sessionId: string) => {
+    try {
+      const response = await fetch(
+        `http://localhost:8081/api/maintenance-sessions/${sessionId}/start`,
+        {
           method: "PATCH",
           headers,
-        });
-
-        if (response.ok) {
-          const updatedSession = await response.json();
-          setState((prev) => ({
-            ...prev,
-            myMaintenanceSessions: prev.myMaintenanceSessions.map((session) =>
-              session.id === sessionId ? updatedSession : session
-            ),
-          }));
         }
-      } catch (error) {
-        console.error("Erreur démarrage session maintenance:", error);
+      );
+
+      if (response.ok) {
+        const updatedSession = await response.json();
+        setState((prev) => ({
+          ...prev,
+          myMaintenanceSessions: prev.myMaintenanceSessions.map((session) =>
+            session.id === sessionId ? updatedSession : session
+          ),
+        }));
       }
-    },
-    []
-  );
+    } catch (error) {
+      console.error("Erreur démarrage session maintenance:", error);
+    }
+  }, []);
 
   // Compléter une session de maintenance
   const completeMaintenanceSession = useCallback(
     async (sessionId: string, agentNotes?: string) => {
       try {
-        const response = await fetch(`http://localhost:8081/api/maintenance-sessions/${sessionId}/complete`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({ agentNotes }),
-        });
+        const response = await fetch(
+          `http://localhost:8081/api/maintenance-sessions/${sessionId}/complete`,
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({ agentNotes }),
+          }
+        );
 
         if (response.ok) {
           const updatedSession = await response.json();
@@ -809,11 +865,14 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
   const updateMaintenanceSessionStatus = useCallback(
     async (sessionId: string, status: SessionStatus) => {
       try {
-        const response = await fetch(`http://localhost:8081/api/maintenance-sessions/${sessionId}`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({ status }),
-        });
+        const response = await fetch(
+          `http://localhost:8081/api/maintenance-sessions/${sessionId}`,
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({ status }),
+          }
+        );
 
         if (response.ok) {
           const updatedSession = await response.json();
@@ -836,10 +895,13 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!session?.user?.id) return;
 
     try {
-      const response = await fetch(`http://localhost:8081/api/agents/my-tickets`, {
-        method: "GET",
-        headers,
-      });
+      const response = await fetch(
+        `http://localhost:8081/api/agents/my-tickets`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
 
       if (response.ok) {
         const myTickets = await response.json();
@@ -897,11 +959,14 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
       if (!state.myProfile) return;
 
       try {
-        const response = await fetch(`http://localhost:8081/api/tickets/${ticketId}/accept`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({ agentId: state.myProfile.id }),
-        });
+        const response = await fetch(
+          `http://localhost:8081/api/tickets/${ticketId}/accept`,
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({ agentId: state.myProfile.id }),
+          }
+        );
 
         if (response.ok) {
           const updatedTicket = await response.json();
@@ -929,11 +994,14 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
           body.resolvedAt = new Date().toISOString();
         }
 
-        const response = await fetch(`http://localhost:8081/api/tickets/${ticketId}`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify(body),
-        });
+        const response = await fetch(
+          `http://localhost:8081/api/tickets/${ticketId}`,
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify(body),
+          }
+        );
 
         if (response.ok) {
           const updatedTicket = await response.json();
@@ -964,10 +1032,13 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!session?.user?.id) return;
 
     try {
-      const response = await fetch(`http://localhost:8081/api/agents/my-specialties`, {
-        method: "GET",
-        headers,
-      });
+      const response = await fetch(
+        `http://localhost:8081/api/agents/my-specialties`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
 
       if (response.ok) {
         const mySpecialties = await response.json();
@@ -990,14 +1061,17 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
       if (!state.myProfile) return;
 
       try {
-        const response = await fetch("http://localhost:8081/api/agent-specialties", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            ...data,
-            agentId: state.myProfile.id,
-          }),
-        });
+        const response = await fetch(
+          "http://localhost:8081/api/agent-specialties",
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              ...data,
+              agentId: state.myProfile.id,
+            }),
+          }
+        );
 
         if (response.ok) {
           const newSpecialty = await response.json();
@@ -1015,18 +1089,24 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Mettre à jour une spécialité
   const updateMySpecialty = useCallback(
-    async (id: string, data: {
-      name?: string;
-      category?: string;
-      level?: string;
-      certified?: boolean;
-    }) => {
+    async (
+      id: string,
+      data: {
+        name?: string;
+        category?: string;
+        level?: string;
+        certified?: boolean;
+      }
+    ) => {
       try {
-        const response = await fetch(`http://localhost:8081/api/agent-specialties/${id}`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify(data),
-        });
+        const response = await fetch(
+          `http://localhost:8081/api/agent-specialties/${id}`,
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify(data),
+          }
+        );
 
         if (response.ok) {
           const updatedSpecialty = await response.json();
@@ -1045,26 +1125,28 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   // Supprimer une spécialité
-  const removeMySpecialty = useCallback(
-    async (id: string) => {
-      try {
-        const response = await fetch(`http://localhost:8081/api/agent-specialties/${id}`, {
+  const removeMySpecialty = useCallback(async (id: string) => {
+    try {
+      const response = await fetch(
+        `http://localhost:8081/api/agent-specialties/${id}`,
+        {
           method: "DELETE",
           headers,
-        });
-
-        if (response.ok) {
-          setState((prev) => ({
-            ...prev,
-            mySpecialties: prev.mySpecialties.filter((specialty) => specialty.id !== id),
-          }));
         }
-      } catch (error) {
-        console.error("Erreur suppression spécialité:", error);
+      );
+
+      if (response.ok) {
+        setState((prev) => ({
+          ...prev,
+          mySpecialties: prev.mySpecialties.filter(
+            (specialty) => specialty.id !== id
+          ),
+        }));
       }
-    },
-    []
-  );
+    } catch (error) {
+      console.error("Erreur suppression spécialité:", error);
+    }
+  }, []);
 
   // Statistiques personnelles
   const getMyStats = useCallback(() => {
@@ -1083,12 +1165,19 @@ export const AgentProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     ).length;
 
     const upcomingSessions = [
-      ...state.myCleaningSessions.filter((session) => session.status === "planned"),
-      ...state.myMaintenanceSessions.filter((session) => session.status === "planned"),
+      ...state.myCleaningSessions.filter(
+        (session) => session.status === "planned"
+      ),
+      ...state.myMaintenanceSessions.filter(
+        (session) => session.status === "planned"
+      ),
     ].length;
 
     const openTickets = state.myTickets.filter(
-      (ticket) => ticket.status === "open" || ticket.status === "assigned" || ticket.status === "in_progress"
+      (ticket) =>
+        ticket.status === "open" ||
+        ticket.status === "assigned" ||
+        ticket.status === "in_progress"
     ).length;
 
     return {
@@ -1219,9 +1308,7 @@ export const useMyAgentStats = () => {
 // Hook pour mes tâches actives
 export const useMyActiveTasks = () => {
   const { myTasks } = useMyAgentProfile();
-  return myTasks.filter(
-    (task) => task.status === "assigned" || task.status === "in_progress"
-  );
+  return myTasks;
 };
 
 // Hook pour mes sessions à venir
@@ -1237,9 +1324,9 @@ export const useMyUpcomingSessions = () => {
 export const useMyOpenTickets = () => {
   const { myTickets } = useMyAgentProfile();
   return myTickets.filter(
-    (ticket) => 
-      ticket.status === "open" || 
-      ticket.status === "assigned" || 
+    (ticket) =>
+      ticket.status === "open" ||
+      ticket.status === "assigned" ||
       ticket.status === "in_progress"
   );
 };

@@ -6,6 +6,9 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  Modal,
+  TextInput,
+  Switch,
 } from "react-native";
 import { authClient } from "~/lib/auth-client";
 import {
@@ -14,6 +17,7 @@ import {
   type LaundryOrder,
   type LaundryOrderItem,
   type DeliveryNote,
+  type LaundryClientProfile,
 } from "~/context/BlanchisserieContext";
 
 // Interfaces TypeScript pour une validation stricte
@@ -38,17 +42,359 @@ export default function BlanchisserieScreen() {
     products,
     orders,
     deliveryNotes,
+    clients,
     isLoading,
     error,
     fetchProducts,
     fetchOrders,
     fetchDeliveryNotes,
+    fetchClients,
     createProduct,
     updateProduct,
     createOrder,
     updateOrder,
+    createClient,
   } = useBlanchisserie();
   const [activeTab, setActiveTab] = useState<TabType>("products");
+
+  // États pour les modals
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [showClientSelector, setShowClientSelector] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<LaundryProduct | null>(
+    null
+  );
+  const [editingOrder, setEditingOrder] = useState<LaundryOrder | null>(null);
+
+  // États pour les formulaires de produit
+  const [productForm, setProductForm] = useState({
+    name: "",
+    description: "",
+    price: "",
+    stock: "",
+    category: "",
+    isActive: true,
+  });
+
+  // États pour les formulaires de commande
+  const [orderForm, setOrderForm] = useState({
+    clientId: "",
+    pickupAddress: "",
+    deliveryAddress: "",
+    instructions: "",
+    subtotal: "",
+    taxes: "",
+    deliveryFee: "",
+    notes: "",
+  });
+
+  // États pour les formulaires de client
+  const [clientForm, setClientForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    companyName: "",
+    contactPerson: "",
+    defaultDeliveryAddress: "",
+    defaultPickupAddress: "",
+    preferredPickupTime: "",
+    specialInstructions: "",
+    creditLimit: "",
+    paymentTerms: "",
+  });
+
+  // Fonctions de gestion des modals et formulaires
+  const openProductModal = (product?: LaundryProduct) => {
+    if (product) {
+      setEditingProduct(product);
+      setProductForm({
+        name: product.name,
+        description: product.description,
+        price: product.price.toString(),
+        stock: product.stock.toString(),
+        category: product.category || "",
+        isActive: product.isActive,
+      });
+    } else {
+      setEditingProduct(null);
+      setProductForm({
+        name: "",
+        description: "",
+        price: "",
+        stock: "",
+        category: "",
+        isActive: true,
+      });
+    }
+    setShowProductModal(true);
+  };
+
+  const openOrderModal = (order?: LaundryOrder) => {
+    if (order) {
+      setEditingOrder(order);
+      setOrderForm({
+        clientId: order.clientId,
+        pickupAddress: order.pickupAddress || "",
+        deliveryAddress: order.deliveryAddress,
+        instructions: order.instructions || "",
+        subtotal: order.subtotal.toString(),
+        taxes: (order.taxes || 0).toString(),
+        deliveryFee: (order.deliveryFee || 0).toString(),
+        notes: order.notes || "",
+      });
+    } else {
+      setEditingOrder(null);
+      setOrderForm({
+        clientId: "",
+        pickupAddress: "",
+        deliveryAddress: "",
+        instructions: "",
+        subtotal: "",
+        taxes: "",
+        deliveryFee: "",
+        notes: "",
+      });
+    }
+    setShowOrderModal(true);
+  };
+
+  const closeProductModal = () => {
+    setShowProductModal(false);
+    setEditingProduct(null);
+    setProductForm({
+      name: "",
+      description: "",
+      price: "",
+      stock: "",
+      category: "",
+      isActive: true,
+    });
+  };
+
+  const closeOrderModal = () => {
+    setShowOrderModal(false);
+    setEditingOrder(null);
+    setOrderForm({
+      clientId: "",
+      pickupAddress: "",
+      deliveryAddress: "",
+      instructions: "",
+      subtotal: "",
+      taxes: "",
+      deliveryFee: "",
+      notes: "",
+    });
+  };
+
+  const openClientSelector = () => {
+    setShowClientSelector(true);
+    fetchClients(); // Charger les clients
+  };
+
+  const closeClientSelector = () => {
+    setShowClientSelector(false);
+  };
+
+  const openClientModal = () => {
+    setShowClientModal(true);
+    setClientForm({
+      name: "",
+      email: "",
+      phone: "",
+      companyName: "",
+      contactPerson: "",
+      defaultDeliveryAddress: "",
+      defaultPickupAddress: "",
+      preferredPickupTime: "morning",
+      specialInstructions: "",
+      creditLimit: "",
+      paymentTerms: "30",
+    });
+  };
+
+  const closeClientModal = () => {
+    setShowClientModal(false);
+    setClientForm({
+      name: "",
+      email: "",
+      phone: "",
+      companyName: "",
+      contactPerson: "",
+      defaultDeliveryAddress: "",
+      defaultPickupAddress: "",
+      preferredPickupTime: "",
+      specialInstructions: "",
+      creditLimit: "",
+      paymentTerms: "",
+    });
+  };
+
+  const selectClient = (client: LaundryClientProfile) => {
+    setOrderForm((prev) => ({
+      ...prev,
+      clientId: client.id,
+      deliveryAddress: client.defaultDeliveryAddress || prev.deliveryAddress,
+      pickupAddress: client.defaultPickupAddress || prev.pickupAddress,
+    }));
+    closeClientSelector();
+  };
+
+  const handleProductSubmit = async () => {
+    try {
+      const productData = {
+        name: productForm.name.trim(),
+        description: productForm.description.trim(),
+        price: parseFloat(productForm.price),
+        stock: parseInt(productForm.stock),
+        category: productForm.category.trim() || undefined,
+        isActive: productForm.isActive,
+      };
+
+      // Validation
+      if (
+        !productData.name ||
+        !productData.description ||
+        isNaN(productData.price) ||
+        isNaN(productData.stock)
+      ) {
+        Alert.alert(
+          "Erreur",
+          "Veuillez remplir tous les champs obligatoires avec des valeurs valides"
+        );
+        return;
+      }
+
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, productData);
+        Alert.alert("Succès", "Produit mis à jour avec succès");
+      } else {
+        await createProduct(productData);
+        Alert.alert("Succès", "Produit créé avec succès");
+      }
+
+      closeProductModal();
+      fetchProducts();
+    } catch (error) {
+      Alert.alert(
+        "Erreur",
+        "Une erreur est survenue lors de l'enregistrement du produit"
+      );
+    }
+  };
+
+  const handleOrderSubmit = async () => {
+    try {
+      const subtotal = parseFloat(orderForm.subtotal);
+      const taxes = parseFloat(orderForm.taxes) || 0;
+      const deliveryFee = parseFloat(orderForm.deliveryFee) || 0;
+      const totalAmount = subtotal + taxes + deliveryFee;
+
+      const orderData = {
+        clientId: orderForm.clientId,
+        pickupAddress: orderForm.pickupAddress.trim() || undefined,
+        deliveryAddress: orderForm.deliveryAddress.trim(),
+        instructions: orderForm.instructions.trim() || undefined,
+        subtotal,
+        taxes,
+        deliveryFee,
+        totalAmount,
+        notes: orderForm.notes.trim() || undefined,
+        managerId: "", // Sera géré par l'API
+        status: "received" as const,
+        receivedByClient: false,
+      };
+
+      // Validation
+      if (
+        !orderData.clientId ||
+        !orderData.deliveryAddress ||
+        isNaN(subtotal)
+      ) {
+        Alert.alert(
+          "Erreur",
+          "Veuillez remplir tous les champs obligatoires avec des valeurs valides"
+        );
+        return;
+      }
+
+      if (editingOrder) {
+        await updateOrder(editingOrder.id, orderData);
+        Alert.alert("Succès", "Commande mise à jour avec succès");
+      } else {
+        await createOrder(orderData);
+        Alert.alert("Succès", "Commande créée avec succès");
+      }
+
+      closeOrderModal();
+      fetchOrders();
+    } catch (error) {
+      Alert.alert(
+        "Erreur",
+        "Une erreur est survenue lors de l'enregistrement de la commande"
+      );
+    }
+  };
+
+  const handleClientSubmit = async () => {
+    try {
+      const clientData = {
+        userId: "", // Sera géré par l'API
+        companyName: clientForm.companyName.trim() || undefined,
+        contactPerson: clientForm.contactPerson.trim() || undefined,
+        defaultDeliveryAddress: clientForm.defaultDeliveryAddress.trim(),
+        defaultPickupAddress:
+          clientForm.defaultPickupAddress.trim() || undefined,
+        preferredPickupTime: clientForm.preferredPickupTime || undefined,
+        specialInstructions: clientForm.specialInstructions.trim() || undefined,
+        creditLimit: clientForm.creditLimit
+          ? parseFloat(clientForm.creditLimit)
+          : undefined,
+        paymentTerms: clientForm.paymentTerms
+          ? parseInt(clientForm.paymentTerms)
+          : undefined,
+        // Données utilisateur
+        user: {
+          name: clientForm.name.trim(),
+          email: clientForm.email.trim(),
+          phone: clientForm.phone.trim() || undefined,
+        },
+      };
+
+      // Validation
+      if (
+        !clientData.user.name ||
+        !clientData.user.email ||
+        !clientData.defaultDeliveryAddress
+      ) {
+        Alert.alert("Erreur", "Veuillez remplir tous les champs obligatoires");
+        return;
+      }
+
+      // Validation email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(clientData.user.email)) {
+        Alert.alert("Erreur", "Veuillez entrer une adresse email valide");
+        return;
+      }
+
+      await createClient(clientData);
+      Alert.alert("Succès", "Client créé avec succès");
+
+      closeClientModal();
+      fetchClients(); // Recharger la liste des clients
+
+      // Ouvrir le sélecteur pour permettre de choisir le nouveau client
+      setTimeout(() => {
+        openClientSelector();
+      }, 500);
+    } catch (error) {
+      Alert.alert(
+        "Erreur",
+        "Une erreur est survenue lors de la création du client"
+      );
+    }
+  };
 
   // Fonctions de validation des données
   const validateProductsData = (): boolean => {
@@ -221,13 +567,7 @@ export default function BlanchisserieScreen() {
             <Text style={styles.tabTitle}>Produits & Stock</Text>
             <TouchableOpacity
               style={styles.addButton}
-              onPress={(): void => {
-                console.log("Ajout de produit demandé");
-                Alert.alert(
-                  "Information",
-                  "Fonctionnalité d'ajout en cours de développement"
-                );
-              }}
+              onPress={() => openProductModal()}
             >
               <Text style={styles.addButtonText}>+ Ajouter</Text>
             </TouchableOpacity>
@@ -245,13 +585,7 @@ export default function BlanchisserieScreen() {
           <Text style={styles.tabTitle}>Produits & Stock</Text>
           <TouchableOpacity
             style={styles.addButton}
-            onPress={(): void => {
-              console.log("Ajout de produit demandé");
-              Alert.alert(
-                "Information",
-                "Fonctionnalité d'ajout en cours de développement"
-              );
-            }}
+            onPress={() => openProductModal()}
           >
             <Text style={styles.addButtonText}>+ Ajouter</Text>
           </TouchableOpacity>
@@ -337,15 +671,7 @@ export default function BlanchisserieScreen() {
                   <View style={styles.productActions}>
                     <TouchableOpacity
                       style={styles.actionButton}
-                      onPress={(): void => {
-                        console.log(
-                          `Modification du produit ${product.id} demandée`
-                        );
-                        Alert.alert(
-                          "Information",
-                          "Fonctionnalité de modification en cours de développement"
-                        );
-                      }}
+                      onPress={() => openProductModal(product)}
                     >
                       <Text style={styles.actionButtonText}>Modifier</Text>
                     </TouchableOpacity>
@@ -390,13 +716,7 @@ export default function BlanchisserieScreen() {
             <Text style={styles.tabTitle}>Commandes</Text>
             <TouchableOpacity
               style={styles.addButton}
-              onPress={(): void => {
-                console.log("Ajout de commande demandé");
-                Alert.alert(
-                  "Information",
-                  "Fonctionnalité d'ajout en cours de développement"
-                );
-              }}
+              onPress={() => openOrderModal()}
             >
               <Text style={styles.addButtonText}>+ Nouvelle</Text>
             </TouchableOpacity>
@@ -414,13 +734,7 @@ export default function BlanchisserieScreen() {
           <Text style={styles.tabTitle}>Commandes</Text>
           <TouchableOpacity
             style={styles.addButton}
-            onPress={(): void => {
-              console.log("Ajout de commande demandé");
-              Alert.alert(
-                "Information",
-                "Fonctionnalité d'ajout en cours de développement"
-              );
-            }}
+            onPress={() => openOrderModal()}
           >
             <Text style={styles.addButtonText}>+ Nouvelle</Text>
           </TouchableOpacity>
@@ -737,25 +1051,42 @@ export default function BlanchisserieScreen() {
     // Calculs des statistiques depuis les données du contexte
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
-    
+
     // Commandes de ce mois
-    const ordersThisMonth = validateOrdersData() ? orders.filter(order => {
-      if (!order.createdAt) return false;
-      const orderDate = new Date(order.createdAt);
-      return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
-    }).length : 0;
-    
+    const ordersThisMonth = validateOrdersData()
+      ? orders.filter((order) => {
+          if (!order.createdAt) return false;
+          const orderDate = new Date(order.createdAt);
+          return (
+            orderDate.getMonth() === currentMonth &&
+            orderDate.getFullYear() === currentYear
+          );
+        }).length
+      : 0;
+
     // Chiffre d'affaires total
-    const totalRevenue = validateOrdersData() ? orders
-      .filter(order => order.status === 'completed' || order.status === 'delivered')
-      .reduce((sum, order) => sum + (typeof order.totalAmount === 'number' ? order.totalAmount : 0), 0) : 0;
-    
+    const totalRevenue = validateOrdersData()
+      ? orders
+          .filter(
+            (order) =>
+              order.status === "completed" || order.status === "delivered"
+          )
+          .reduce(
+            (sum, order) =>
+              sum +
+              (typeof order.totalAmount === "number" ? order.totalAmount : 0),
+            0
+          )
+      : 0;
+
     // Livraisons effectuées
-    const completedDeliveries = validateDeliveryNotesData() ? deliveryNotes.length : 0;
-    
+    const completedDeliveries = validateDeliveryNotesData()
+      ? deliveryNotes.length
+      : 0;
+
     // Note de satisfaction (placeholder car pas de données de satisfaction dans le contexte)
-    const satisfactionScore = 'N/A';
-    
+    const satisfactionScore = "N/A";
+
     return (
       <View style={styles.tabContent}>
         <View style={styles.tabHeader}>
@@ -781,7 +1112,9 @@ export default function BlanchisserieScreen() {
               <Text style={styles.statIconText}>💰</Text>
             </View>
             <View style={styles.statContent}>
-              <Text style={styles.statValue}>{totalRevenue.toLocaleString('fr-FR')}€</Text>
+              <Text style={styles.statValue}>
+                {totalRevenue.toLocaleString("fr-FR")}€
+              </Text>
               <Text style={styles.statLabel}>Chiffre d'affaires</Text>
             </View>
           </View>
@@ -823,51 +1156,96 @@ export default function BlanchisserieScreen() {
           <Text style={styles.sectionTitle}>Produits les plus demandés</Text>
           <View style={styles.topProductsList}>
             {validateProductsData() ? (
-              products.slice(0, 3).map((product, index) => {
-                if (!product || !product.id) return null;
-                
-                // Calculer les ventes réelles pour ce produit depuis les commandes
-                const productSales = validateOrdersData() ? orders
-                  .filter(order => order.items && Array.isArray(order.items))
-                  .reduce((totalSales, order) => {
-                    if (!order.items || !Array.isArray(order.items)) return totalSales;
-                    const productItems = order.items.filter(item => 
-                      item && item.product && item.product.id === product.id
-                    );
-                    return totalSales + productItems.reduce((sum, item) => 
-                      sum + (typeof item.quantity === 'number' ? item.quantity : 0), 0
-                    );
-                  }, 0) : 0;
-                
-                // Calculer le chiffre d'affaires pour ce produit
-                const productRevenue = validateOrdersData() ? orders
-                  .filter(order => order.items && Array.isArray(order.items))
-                  .reduce((totalRevenue, order) => {
-                    if (!order.items || !Array.isArray(order.items)) return totalRevenue;
-                    const productItems = order.items.filter(item => 
-                      item && item.product && item.product.id === product.id
-                    );
-                    return totalRevenue + productItems.reduce((sum, item) => 
-                      sum + (typeof item.subtotal === 'number' ? item.subtotal : 0), 0
-                    );
-                  }, 0) : 0;
-                  
-                return (
-                  <View key={product.id} style={styles.topProductItem}>
-                    <View style={styles.topProductRank}>
-                      <Text style={styles.topProductRankText}>#{index + 1}</Text>
+              products
+                .slice(0, 3)
+                .map((product, index) => {
+                  if (!product || !product.id) return null;
+
+                  // Calculer les ventes réelles pour ce produit depuis les commandes
+                  const productSales = validateOrdersData()
+                    ? orders
+                        .filter(
+                          (order) => order.items && Array.isArray(order.items)
+                        )
+                        .reduce((totalSales, order) => {
+                          if (!order.items || !Array.isArray(order.items))
+                            return totalSales;
+                          const productItems = order.items.filter(
+                            (item) =>
+                              item &&
+                              item.product &&
+                              item.product.id === product.id
+                          );
+                          return (
+                            totalSales +
+                            productItems.reduce(
+                              (sum, item) =>
+                                sum +
+                                (typeof item.quantity === "number"
+                                  ? item.quantity
+                                  : 0),
+                              0
+                            )
+                          );
+                        }, 0)
+                    : 0;
+
+                  // Calculer le chiffre d'affaires pour ce produit
+                  const productRevenue = validateOrdersData()
+                    ? orders
+                        .filter(
+                          (order) => order.items && Array.isArray(order.items)
+                        )
+                        .reduce((totalRevenue, order) => {
+                          if (!order.items || !Array.isArray(order.items))
+                            return totalRevenue;
+                          const productItems = order.items.filter(
+                            (item) =>
+                              item &&
+                              item.product &&
+                              item.product.id === product.id
+                          );
+                          return (
+                            totalRevenue +
+                            productItems.reduce(
+                              (sum, item) =>
+                                sum +
+                                (typeof item.subtotal === "number"
+                                  ? item.subtotal
+                                  : 0),
+                              0
+                            )
+                          );
+                        }, 0)
+                    : 0;
+
+                  return (
+                    <View key={product.id} style={styles.topProductItem}>
+                      <View style={styles.topProductRank}>
+                        <Text style={styles.topProductRankText}>
+                          #{index + 1}
+                        </Text>
+                      </View>
+                      <View style={styles.topProductInfo}>
+                        <Text style={styles.topProductName}>
+                          {product.name || "Produit sans nom"}
+                        </Text>
+                        <Text style={styles.topProductSales}>
+                          {productSales} ventes
+                        </Text>
+                      </View>
+                      <Text style={styles.topProductRevenue}>
+                        {productRevenue.toLocaleString("fr-FR")}€
+                      </Text>
                     </View>
-                    <View style={styles.topProductInfo}>
-                      <Text style={styles.topProductName}>{product.name || 'Produit sans nom'}</Text>
-                      <Text style={styles.topProductSales}>{productSales} ventes</Text>
-                    </View>
-                    <Text style={styles.topProductRevenue}>{productRevenue.toLocaleString('fr-FR')}€</Text>
-                  </View>
-                );
-              }).filter(item => item !== null)
+                  );
+                })
+                .filter((item) => item !== null)
             ) : (
               <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>Aucun produit disponible pour les statistiques</Text>
+                <Text style={styles.errorText}>
+                  Aucun produit disponible pour les statistiques
+                </Text>
               </View>
             )}
           </View>
@@ -875,6 +1253,585 @@ export default function BlanchisserieScreen() {
       </View>
     );
   };
+
+  // Modal pour les produits
+  const renderProductModal = () => (
+    <Modal
+      visible={showProductModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={closeProductModal}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={closeProductModal}>
+            <Text style={styles.modalCancelText}>Annuler</Text>
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>
+            {editingProduct ? "Modifier le produit" : "Nouveau produit"}
+          </Text>
+          <TouchableOpacity onPress={handleProductSubmit}>
+            <Text style={styles.modalSaveText}>Enregistrer</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          style={styles.modalContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Nom du produit *</Text>
+            <TextInput
+              style={styles.formInput}
+              value={productForm.name}
+              onChangeText={(text) =>
+                setProductForm((prev) => ({ ...prev, name: text }))
+              }
+              placeholder="Entrez le nom du produit"
+              autoCapitalize="words"
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Description *</Text>
+            <TextInput
+              style={[styles.formInput, styles.formTextArea]}
+              value={productForm.description}
+              onChangeText={(text) =>
+                setProductForm((prev) => ({ ...prev, description: text }))
+              }
+              placeholder="Décrivez le produit"
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+          </View>
+
+          <View style={styles.formRow}>
+            <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+              <Text style={styles.formLabel}>Prix (€) *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={productForm.price}
+                onChangeText={(text) =>
+                  setProductForm((prev) => ({ ...prev, price: text }))
+                }
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+              />
+            </View>
+
+            <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+              <Text style={styles.formLabel}>Stock *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={productForm.stock}
+                onChangeText={(text) =>
+                  setProductForm((prev) => ({ ...prev, stock: text }))
+                }
+                placeholder="0"
+                keyboardType="number-pad"
+              />
+            </View>
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Catégorie</Text>
+            <TextInput
+              style={styles.formInput}
+              value={productForm.category}
+              onChangeText={(text) =>
+                setProductForm((prev) => ({ ...prev, category: text }))
+              }
+              placeholder="Catégorie du produit (optionnel)"
+              autoCapitalize="words"
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <View style={styles.switchRow}>
+              <Text style={styles.formLabel}>Produit actif</Text>
+              <Switch
+                value={productForm.isActive}
+                onValueChange={(value) =>
+                  setProductForm((prev) => ({ ...prev, isActive: value }))
+                }
+                trackColor={{ false: "#E5E5E7", true: "#007AFF" }}
+                thumbColor={productForm.isActive ? "#FFFFFF" : "#F4F3F4"}
+              />
+            </View>
+            <Text style={styles.formHint}>
+              Les produits inactifs ne sont pas visibles dans les commandes
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+
+  // Modal pour les commandes
+  const renderOrderModal = () => (
+    <Modal
+      visible={showOrderModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={closeOrderModal}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={closeOrderModal}>
+            <Text style={styles.modalCancelText}>Annuler</Text>
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>
+            {editingOrder ? "Modifier la commande" : "Nouvelle commande"}
+          </Text>
+          <TouchableOpacity onPress={handleOrderSubmit}>
+            <Text style={styles.modalSaveText}>Enregistrer</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          style={styles.modalContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Client *</Text>
+            <View style={styles.clientSection}>
+              <TouchableOpacity
+                style={[styles.pickerContainer, styles.clientPickerButton]}
+                onPress={openClientSelector}
+              >
+                <Text
+                  style={[
+                    styles.pickerPlaceholder,
+                    orderForm.clientId && styles.pickerSelected,
+                  ]}
+                >
+                  {orderForm.clientId
+                    ? clients.find((c) => c.id === orderForm.clientId)?.user
+                        ?.name || "Client sélectionné"
+                    : "Sélectionner un client existant"}
+                </Text>
+                <Text style={styles.pickerIcon}>👥</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.orText}>ou</Text>
+
+              <TouchableOpacity
+                style={styles.createClientButton}
+                onPress={openClientModal}
+              >
+                <Text style={styles.createClientText}>
+                  + Créer un nouveau client
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Adresse de livraison *</Text>
+            <TextInput
+              style={[styles.formInput, styles.formTextArea]}
+              value={orderForm.deliveryAddress}
+              onChangeText={(text) =>
+                setOrderForm((prev) => ({ ...prev, deliveryAddress: text }))
+              }
+              placeholder="Adresse complète de livraison"
+              multiline
+              numberOfLines={2}
+              textAlignVertical="top"
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Adresse de collecte</Text>
+            <TextInput
+              style={[styles.formInput, styles.formTextArea]}
+              value={orderForm.pickupAddress}
+              onChangeText={(text) =>
+                setOrderForm((prev) => ({ ...prev, pickupAddress: text }))
+              }
+              placeholder="Adresse de collecte (optionnel)"
+              multiline
+              numberOfLines={2}
+              textAlignVertical="top"
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Instructions</Text>
+            <TextInput
+              style={[styles.formInput, styles.formTextArea]}
+              value={orderForm.instructions}
+              onChangeText={(text) =>
+                setOrderForm((prev) => ({ ...prev, instructions: text }))
+              }
+              placeholder="Instructions spéciales pour la commande"
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+          </View>
+
+          <View style={styles.formRow}>
+            <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+              <Text style={styles.formLabel}>Sous-total (€) *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={orderForm.subtotal}
+                onChangeText={(text) =>
+                  setOrderForm((prev) => ({ ...prev, subtotal: text }))
+                }
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+              />
+            </View>
+
+            <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+              <Text style={styles.formLabel}>Taxes (€)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={orderForm.taxes}
+                onChangeText={(text) =>
+                  setOrderForm((prev) => ({ ...prev, taxes: text }))
+                }
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+              />
+            </View>
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Frais de livraison (€)</Text>
+            <TextInput
+              style={styles.formInput}
+              value={orderForm.deliveryFee}
+              onChangeText={(text) =>
+                setOrderForm((prev) => ({ ...prev, deliveryFee: text }))
+              }
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Notes</Text>
+            <TextInput
+              style={[styles.formInput, styles.formTextArea]}
+              value={orderForm.notes}
+              onChangeText={(text) =>
+                setOrderForm((prev) => ({ ...prev, notes: text }))
+              }
+              placeholder="Notes internes"
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+          </View>
+
+          {/* Affichage du total calculé */}
+          <View style={styles.totalSection}>
+            <Text style={styles.totalLabel}>Total calculé:</Text>
+            <Text style={styles.totalValue}>
+              {(
+                parseFloat(orderForm.subtotal || "0") +
+                parseFloat(orderForm.taxes || "0") +
+                parseFloat(orderForm.deliveryFee || "0")
+              ).toFixed(2)}
+              €
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+
+  // Modal pour sélectionner un client
+  const renderClientSelectorModal = () => (
+    <Modal
+      visible={showClientSelector}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={closeClientSelector}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={closeClientSelector}>
+            <Text style={styles.modalCancelText}>Annuler</Text>
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>Sélectionner un client</Text>
+          <TouchableOpacity onPress={openClientModal}>
+            <Text style={styles.modalSaveText}>+ Nouveau</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          style={styles.modalContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {clients.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>Aucun client trouvé</Text>
+              <TouchableOpacity
+                style={styles.createClientButton}
+                onPress={openClientModal}
+              >
+                <Text style={styles.createClientText}>
+                  + Créer le premier client
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.clientsList}>
+              {clients.map((client) => (
+                <TouchableOpacity
+                  key={client.id}
+                  style={[
+                    styles.clientItem,
+                    orderForm.clientId === client.id &&
+                      styles.clientItemSelected,
+                  ]}
+                  onPress={() => selectClient(client)}
+                >
+                  <View style={styles.clientItemContent}>
+                    <View style={styles.clientItemHeader}>
+                      <Text style={styles.clientItemName}>
+                        {client.user?.name || "Nom non disponible"}
+                      </Text>
+                      {client.companyName && (
+                        <Text style={styles.clientItemCompany}>
+                          {client.companyName}
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={styles.clientItemEmail}>
+                      {client.user?.email || "Email non disponible"}
+                    </Text>
+                    {client.user?.phone && (
+                      <Text style={styles.clientItemPhone}>
+                        📞 {client.user.phone}
+                      </Text>
+                    )}
+                    {client.defaultDeliveryAddress && (
+                      <Text style={styles.clientItemAddress}>
+                        📍 {client.defaultDeliveryAddress}
+                      </Text>
+                    )}
+                  </View>
+                  {orderForm.clientId === client.id && (
+                    <Text style={styles.clientItemCheck}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+
+  // Modal pour créer un nouveau client
+  const renderClientModal = () => (
+    <Modal
+      visible={showClientModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={closeClientModal}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={closeClientModal}>
+            <Text style={styles.modalCancelText}>Annuler</Text>
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>Nouveau client</Text>
+          <TouchableOpacity onPress={handleClientSubmit}>
+            <Text style={styles.modalSaveText}>Créer</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          style={styles.modalContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.sectionTitle}>Informations personnelles</Text>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Nom complet *</Text>
+            <TextInput
+              style={styles.formInput}
+              value={clientForm.name}
+              onChangeText={(text) =>
+                setClientForm((prev) => ({ ...prev, name: text }))
+              }
+              placeholder="Nom et prénom du contact"
+              autoCapitalize="words"
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Email *</Text>
+            <TextInput
+              style={styles.formInput}
+              value={clientForm.email}
+              onChangeText={(text) =>
+                setClientForm((prev) => ({ ...prev, email: text }))
+              }
+              placeholder="adresse@email.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Téléphone</Text>
+            <TextInput
+              style={styles.formInput}
+              value={clientForm.phone}
+              onChangeText={(text) =>
+                setClientForm((prev) => ({ ...prev, phone: text }))
+              }
+              placeholder="Numéro de téléphone"
+              keyboardType="phone-pad"
+            />
+          </View>
+
+          <Text style={styles.sectionTitle}>Informations entreprise</Text>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Nom de l'entreprise</Text>
+            <TextInput
+              style={styles.formInput}
+              value={clientForm.companyName}
+              onChangeText={(text) =>
+                setClientForm((prev) => ({ ...prev, companyName: text }))
+              }
+              placeholder="Nom de l'entreprise (optionnel)"
+              autoCapitalize="words"
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Personne de contact</Text>
+            <TextInput
+              style={styles.formInput}
+              value={clientForm.contactPerson}
+              onChangeText={(text) =>
+                setClientForm((prev) => ({ ...prev, contactPerson: text }))
+              }
+              placeholder="Personne de contact dans l'entreprise"
+              autoCapitalize="words"
+            />
+          </View>
+
+          <Text style={styles.sectionTitle}>Adresses</Text>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>
+              Adresse de livraison par défaut *
+            </Text>
+            <TextInput
+              style={[styles.formInput, styles.formTextArea]}
+              value={clientForm.defaultDeliveryAddress}
+              onChangeText={(text) =>
+                setClientForm((prev) => ({
+                  ...prev,
+                  defaultDeliveryAddress: text,
+                }))
+              }
+              placeholder="Adresse complète de livraison"
+              multiline
+              numberOfLines={2}
+              textAlignVertical="top"
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Adresse de collecte par défaut</Text>
+            <TextInput
+              style={[styles.formInput, styles.formTextArea]}
+              value={clientForm.defaultPickupAddress}
+              onChangeText={(text) =>
+                setClientForm((prev) => ({
+                  ...prev,
+                  defaultPickupAddress: text,
+                }))
+              }
+              placeholder="Adresse de collecte (optionnel)"
+              multiline
+              numberOfLines={2}
+              textAlignVertical="top"
+            />
+          </View>
+
+          <Text style={styles.sectionTitle}>Préférences</Text>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Heure de collecte préférée</Text>
+            <View style={styles.pickerContainer}>
+              <Text style={styles.pickerPlaceholder}>
+                {clientForm.preferredPickupTime === "morning"
+                  ? "Matin (8h-12h)"
+                  : clientForm.preferredPickupTime === "afternoon"
+                  ? "Après-midi (12h-17h)"
+                  : clientForm.preferredPickupTime === "evening"
+                  ? "Soir (17h-20h)"
+                  : "Sélectionner une préférence"}
+              </Text>
+            </View>
+            {/* Note: Implémenter un vrai picker plus tard */}
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Instructions spéciales</Text>
+            <TextInput
+              style={[styles.formInput, styles.formTextArea]}
+              value={clientForm.specialInstructions}
+              onChangeText={(text) =>
+                setClientForm((prev) => ({
+                  ...prev,
+                  specialInstructions: text,
+                }))
+              }
+              placeholder="Instructions particulières pour ce client"
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+          </View>
+
+          <Text style={styles.sectionTitle}>Conditions commerciales</Text>
+
+          <View style={styles.formRow}>
+            <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+              <Text style={styles.formLabel}>Limite de crédit (€)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={clientForm.creditLimit}
+                onChangeText={(text) =>
+                  setClientForm((prev) => ({ ...prev, creditLimit: text }))
+                }
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+              />
+            </View>
+
+            <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+              <Text style={styles.formLabel}>Délai de paiement (jours)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={clientForm.paymentTerms}
+                onChangeText={(text) =>
+                  setClientForm((prev) => ({ ...prev, paymentTerms: text }))
+                }
+                placeholder="30"
+                keyboardType="number-pad"
+              />
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
 
   return (
     <View style={styles.container}>
@@ -951,6 +1908,12 @@ export default function BlanchisserieScreen() {
         {activeTab === "deliveries" && renderDeliveriesTab()}
         {activeTab === "stats" && renderStatsTab()}
       </ScrollView>
+
+      {/* Modals */}
+      {renderClientSelectorModal()}
+      {renderClientModal()}
+      {renderProductModal()}
+      {renderOrderModal()}
     </View>
   );
 }
@@ -959,11 +1922,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8F9FA",
-    paddingTop: 50,
   },
   header: {
     backgroundColor: "#FFFFFF",
-    paddingTop: 60,
+
     paddingHorizontal: 20,
     paddingBottom: 20,
     borderBottomWidth: 1,
@@ -1360,7 +2322,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: "#1C1C1E",
+    marginTop: 20,
     marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E5E7",
+    paddingBottom: 8,
   },
   topProductsList: {
     gap: 12,
@@ -1467,5 +2433,217 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
+  },
+
+  // Styles pour les modals
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#F8F9FA",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E5E7",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1C1C1E",
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: "#8E8E93",
+    fontWeight: "500",
+  },
+  modalSaveText: {
+    fontSize: 16,
+    color: "#007AFF",
+    fontWeight: "600",
+  },
+  modalContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+
+  // Styles pour les formulaires
+  formGroup: {
+    marginBottom: 20,
+  },
+  formRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  formLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1C1C1E",
+    marginBottom: 8,
+  },
+  formInput: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E5E7",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: "#1C1C1E",
+  },
+  formTextArea: {
+    minHeight: 80,
+    paddingTop: 12,
+  },
+  formHint: {
+    fontSize: 14,
+    color: "#8E8E93",
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  switchRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  pickerContainer: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E5E7",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  pickerPlaceholder: {
+    fontSize: 16,
+    color: "#8E8E93",
+  },
+  totalSection: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1C1C1E",
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#4CAF50",
+  },
+
+  // Styles pour la sélection de client
+  clientSection: {
+    gap: 12,
+  },
+  clientPickerButton: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  pickerSelected: {
+    color: "#1C1C1E",
+    fontWeight: "600",
+  },
+  pickerIcon: {
+    fontSize: 18,
+  },
+  orText: {
+    textAlign: "center",
+    fontSize: 14,
+    color: "#8E8E93",
+    fontWeight: "500",
+  },
+  createClientButton: {
+    backgroundColor: "#F2F2F7",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5E5E7",
+    borderStyle: "dashed",
+  },
+  createClientText: {
+    fontSize: 16,
+    color: "#007AFF",
+    fontWeight: "600",
+  },
+
+  // Styles pour la liste des clients
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: "#8E8E93",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  clientsList: {
+    gap: 12,
+  },
+  clientItem: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5E5E7",
+  },
+  clientItemSelected: {
+    borderColor: "#007AFF",
+    backgroundColor: "#F0F8FF",
+  },
+  clientItemContent: {
+    flex: 1,
+  },
+  clientItemHeader: {
+    marginBottom: 4,
+  },
+  clientItemName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1C1C1E",
+    marginBottom: 2,
+  },
+  clientItemCompany: {
+    fontSize: 14,
+    color: "#007AFF",
+    fontWeight: "600",
+  },
+  clientItemEmail: {
+    fontSize: 14,
+    color: "#8E8E93",
+    marginBottom: 4,
+  },
+  clientItemPhone: {
+    fontSize: 14,
+    color: "#8E8E93",
+    marginBottom: 2,
+  },
+  clientItemAddress: {
+    fontSize: 14,
+    color: "#8E8E93",
+    lineHeight: 18,
+  },
+  clientItemCheck: {
+    fontSize: 20,
+    color: "#007AFF",
+    fontWeight: "700",
   },
 });

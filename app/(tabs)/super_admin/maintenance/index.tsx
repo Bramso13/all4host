@@ -10,15 +10,14 @@ import {
   Alert,
 } from "react-native";
 import { authClient } from "~/lib/auth-client";
-import {
-  useMaintenance,
-  type Ticket,
-  type MaintenanceAgent,
-  type MaintenanceProperty,
-  type MaintenanceSession,
-} from "~/context";
-import { useAgentsByType, type AgentProfile } from "~/context/AgentContext";
+
+import { useMaintenance } from "~/context/MaintenanceContext";
+import { useConciergerie } from "~/context/ConciergerieContext";
+
+import { useAgentsByType } from "~/context/AgentContext";
 import { JSX } from "react";
+import { MaintenanceSession, Ticket } from "~/lib/types";
+import { MaintenanceAgent } from "~/context";
 
 // Types pour les configurations de statut et priorité
 interface StatusConfig {
@@ -44,14 +43,17 @@ type TabType = "dashboard" | "tickets" | "sessions" | "agents";
 // Helper function to check if a date is in the current month
 const isThisMonth = (date: Date): boolean => {
   const now = new Date();
-  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth()
+  );
 };
 
 export default function MaintenanceScreen(): JSX.Element {
   const { data: session } = authClient.useSession();
+  const agents = useAgentsByType("maintenance");
+
   const {
-    properties,
-    agents,
     tickets,
     sessions,
     isLoading,
@@ -59,9 +61,12 @@ export default function MaintenanceScreen(): JSX.Element {
     fetchTickets,
     fetchSessions,
     createTicket,
+    createSession,
     updateTicket,
   } = useMaintenance();
-  
+
+  const { properties } = useConciergerie();
+
   const maintenanceAgents = useAgentsByType("maintenance");
 
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
@@ -69,12 +74,31 @@ export default function MaintenanceScreen(): JSX.Element {
     useState<boolean>(false);
   const [showCreateSessionModal, setShowCreateSessionModal] =
     useState<boolean>(false);
+  const [showCreateTicketModal, setShowCreateTicketModal] = useState<boolean>(false);
+  const [showPlanSessionModal, setShowPlanSessionModal] = useState<boolean>(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<MaintenanceAgent | null>(
     null
   );
   const [sessionNotes, setSessionNotes] = useState<string>("");
   const [estimatedDuration, setEstimatedDuration] = useState<string>("60");
+  
+  // États pour le formulaire de création de ticket
+  const [ticketTitle, setTicketTitle] = useState<string>("");
+  const [ticketDescription, setTicketDescription] = useState<string>("");
+  const [ticketPriority, setTicketPriority] = useState<string>("medium");
+  const [ticketCategory, setTicketCategory] = useState<string>("");
+  const [ticketProperty, setTicketProperty] = useState<string>("");
+  const [ticketRoomLocation, setTicketRoomLocation] = useState<string>("");
+  const [ticketEstimatedCost, setTicketEstimatedCost] = useState<string>("");
+  const [ticketEstimatedDuration, setTicketEstimatedDuration] = useState<string>("");
+  
+  // États pour le formulaire de planification de session
+  const [sessionTicketId, setSessionTicketId] = useState<string>("");
+  const [sessionAgentId, setSessionAgentId] = useState<string>("");
+  const [sessionScheduledDate, setSessionScheduledDate] = useState<string>("");
+  const [sessionWorkDescription, setSessionWorkDescription] = useState<string>("");
+  const [sessionEstimatedDuration, setSessionEstimatedDuration] = useState<string>("60");
 
   // Gestion des états de chargement et d'erreur
   if (isLoading) {
@@ -278,6 +302,87 @@ export default function MaintenanceScreen(): JSX.Element {
     setEstimatedDuration("60");
   };
 
+  const resetTicketForm = (): void => {
+    setTicketTitle("");
+    setTicketDescription("");
+    setTicketPriority("medium");
+    setTicketCategory("");
+    setTicketProperty("");
+    setTicketRoomLocation("");
+    setTicketEstimatedCost("");
+    setTicketEstimatedDuration("");
+  };
+
+  const resetSessionForm = (): void => {
+    setSessionTicketId("");
+    setSessionAgentId("");
+    setSessionScheduledDate("");
+    setSessionWorkDescription("");
+    setSessionEstimatedDuration("60");
+  };
+
+  const handleCreateTicket = async (): Promise<void> => {
+    if (!ticketTitle.trim() || !ticketDescription.trim() || !ticketProperty.trim()) {
+      Alert.alert("Erreur", "Veuillez remplir tous les champs obligatoires");
+      return;
+    }
+
+    try {
+      await createTicket({
+        title: ticketTitle,
+        description: ticketDescription,
+        priority: ticketPriority as "low" | "medium" | "high" | "urgent" | "critical",
+        status: "open",
+        propertyId: ticketProperty,
+        reportedBy: "manager",
+        reportedAt: new Date(),
+        category: ticketCategory || undefined,
+        roomLocation: ticketRoomLocation || undefined,
+        estimatedCost: ticketEstimatedCost ? parseFloat(ticketEstimatedCost) : undefined,
+        estimatedDuration: ticketEstimatedDuration ? parseInt(ticketEstimatedDuration) : undefined,
+        managerId: session?.user?.id || "",
+      });
+      
+      Alert.alert("Succès", "Ticket créé avec succès!");
+      setShowCreateTicketModal(false);
+      resetTicketForm();
+    } catch (error) {
+      Alert.alert("Erreur", "Erreur lors de la création du ticket");
+    }
+  };
+
+  const handlePlanSession = async (): Promise<void> => {
+    if (!sessionTicketId || !sessionAgentId || !sessionScheduledDate) {
+      Alert.alert("Erreur", "Veuillez remplir tous les champs obligatoires");
+      return;
+    }
+
+    const selectedTicketForSession = tickets.find(t => t.id === sessionTicketId);
+    if (!selectedTicketForSession?.propertyId) {
+      Alert.alert("Erreur", "Propriété du ticket introuvable");
+      return;
+    }
+
+    try {
+      await createSession({
+        ticketId: sessionTicketId,
+        propertyId: selectedTicketForSession.propertyId,
+        agentId: sessionAgentId,
+        scheduledDate: new Date(sessionScheduledDate),
+        estimatedDuration: parseInt(sessionEstimatedDuration),
+        status: "planned",
+        workDescription: sessionWorkDescription || undefined,
+        managerId: session?.user?.id || "",
+      });
+      
+      Alert.alert("Succès", "Session planifiée avec succès!");
+      setShowPlanSessionModal(false);
+      resetSessionForm();
+    } catch (error) {
+      Alert.alert("Erreur", "Erreur lors de la planification de la session");
+    }
+  };
+
   const renderDashboard = (): JSX.Element => (
     <View style={styles.tabContent}>
       <View style={styles.statsGrid}>
@@ -286,7 +391,9 @@ export default function MaintenanceScreen(): JSX.Element {
             <Text style={styles.statIconText}>🎫</Text>
           </View>
           <View style={styles.statContent}>
-            <Text style={styles.statValue}>{tickets ? tickets.filter(t => t.status === 'open').length : 0}</Text>
+            <Text style={styles.statValue}>
+              {tickets ? tickets.filter((t) => t.status === "open").length : 0}
+            </Text>
             <Text style={styles.statLabel}>Tickets ouverts</Text>
           </View>
         </View>
@@ -296,7 +403,11 @@ export default function MaintenanceScreen(): JSX.Element {
             <Text style={styles.statIconText}>🔧</Text>
           </View>
           <View style={styles.statContent}>
-            <Text style={styles.statValue}>{sessions ? sessions.filter(s => s.status === 'in_progress').length : 0}</Text>
+            <Text style={styles.statValue}>
+              {sessions
+                ? sessions.filter((s) => s.status === "in_progress").length
+                : 0}
+            </Text>
             <Text style={styles.statLabel}>Sessions en cours</Text>
           </View>
         </View>
@@ -306,7 +417,15 @@ export default function MaintenanceScreen(): JSX.Element {
             <Text style={styles.statIconText}>✅</Text>
           </View>
           <View style={styles.statContent}>
-            <Text style={styles.statValue}>{sessions ? sessions.filter(s => s.status === 'completed' && isThisMonth(new Date(s.updatedAt))).length : 0}</Text>
+            <Text style={styles.statValue}>
+              {sessions
+                ? sessions.filter(
+                    (s) =>
+                      s.status === "completed" &&
+                      isThisMonth(new Date(s.updatedAt))
+                  ).length
+                : 0}
+            </Text>
             <Text style={styles.statLabel}>Complétées ce mois</Text>
           </View>
         </View>
@@ -316,7 +435,13 @@ export default function MaintenanceScreen(): JSX.Element {
             <Text style={styles.statIconText}>👷</Text>
           </View>
           <View style={styles.statContent}>
-            <Text style={styles.statValue}>{maintenanceAgents ? maintenanceAgents.filter(agent => agent.availability === 'available').length : 0}</Text>
+            <Text style={styles.statValue}>
+              {maintenanceAgents
+                ? maintenanceAgents.filter(
+                    (agent) => agent.availability === "available"
+                  ).length
+                : 0}
+            </Text>
             <Text style={styles.statLabel}>Agents disponibles</Text>
           </View>
         </View>
@@ -443,7 +568,9 @@ export default function MaintenanceScreen(): JSX.Element {
                   session.ticket?.title || "Ticket inconnu";
 
                 // Calculate progress for active session
-                const calculateActiveProgress = (session: MaintenanceSession): number => {
+                const calculateActiveProgress = (
+                  session: MaintenanceSession
+                ): number => {
                   if (session.status === "completed") return 100;
                   if (session.status === "cancelled") return 0;
                   if (session.status === "planned") return 0;
@@ -453,7 +580,10 @@ export default function MaintenanceScreen(): JSX.Element {
                       const now = new Date();
                       const elapsed = now.getTime() - startTime.getTime();
                       const elapsedMinutes = elapsed / (1000 * 60);
-                      const progressPercent = Math.min(95, (elapsedMinutes / session.estimatedDuration) * 100);
+                      const progressPercent = Math.min(
+                        95,
+                        (elapsedMinutes / session.estimatedDuration) * 100
+                      );
                       return Math.max(5, progressPercent);
                     }
                     return 25; // Default progress for in_progress without timing data
@@ -473,9 +603,16 @@ export default function MaintenanceScreen(): JSX.Element {
                     <Text style={styles.activeSessionTitle}>{ticketTitle}</Text>
                     <View style={styles.activeSessionProgress}>
                       <View style={styles.progressBar}>
-                        <View style={[styles.progressFill, { width: `${Math.round(sessionProgress)}%` }]} />
+                        <View
+                          style={[
+                            styles.progressFill,
+                            { width: `${Math.round(sessionProgress)}%` },
+                          ]}
+                        />
                       </View>
-                      <Text style={styles.progressText}>{Math.round(sessionProgress)}%</Text>
+                      <Text style={styles.progressText}>
+                        {Math.round(sessionProgress)}%
+                      </Text>
                     </View>
                   </View>
                 );
@@ -506,7 +643,10 @@ export default function MaintenanceScreen(): JSX.Element {
     <View style={styles.tabContent}>
       <View style={styles.tabHeader}>
         <Text style={styles.tabTitle}>Tickets de maintenance</Text>
-        <TouchableOpacity style={styles.addButton}>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => setShowCreateTicketModal(true)}
+        >
           <Text style={styles.addButtonText}>+ Nouveau</Text>
         </TouchableOpacity>
       </View>
@@ -660,9 +800,7 @@ export default function MaintenanceScreen(): JSX.Element {
         ) : (
           <View style={styles.ticketCard}>
             <Text style={styles.ticketTitle}>
-              {!tickets
-                ? "Erreur de chargement"
-                : "Aucun ticket disponible"}
+              {!tickets ? "Erreur de chargement" : "Aucun ticket disponible"}
             </Text>
             <Text style={styles.ticketDescription}>
               {!tickets
@@ -679,7 +817,10 @@ export default function MaintenanceScreen(): JSX.Element {
     <View style={styles.tabContent}>
       <View style={styles.tabHeader}>
         <Text style={styles.tabTitle}>Sessions de maintenance</Text>
-        <TouchableOpacity style={styles.addButton}>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => setShowPlanSessionModal(true)}
+        >
           <Text style={styles.addButtonText}>+ Planifier</Text>
         </TouchableOpacity>
       </View>
@@ -699,7 +840,9 @@ export default function MaintenanceScreen(): JSX.Element {
                 session.status
               );
               // Calculate progress based on actual session data
-              const calculateProgress = (session: MaintenanceSession): number => {
+              const calculateProgress = (
+                session: MaintenanceSession
+              ): number => {
                 if (session.status === "completed") return 100;
                 if (session.status === "cancelled") return 0;
                 if (session.status === "planned") return 0;
@@ -709,7 +852,10 @@ export default function MaintenanceScreen(): JSX.Element {
                     const now = new Date();
                     const elapsed = now.getTime() - startTime.getTime();
                     const elapsedMinutes = elapsed / (1000 * 60);
-                    const progressPercent = Math.min(95, (elapsedMinutes / session.estimatedDuration) * 100);
+                    const progressPercent = Math.min(
+                      95,
+                      (elapsedMinutes / session.estimatedDuration) * 100
+                    );
                     return Math.max(5, progressPercent);
                   }
                   return 25; // Default progress for in_progress without timing data
@@ -847,9 +993,7 @@ export default function MaintenanceScreen(): JSX.Element {
         ) : (
           <View style={styles.sessionCard}>
             <Text style={styles.sessionTitle}>
-              {!sessions
-                ? "Erreur de chargement"
-                : "Aucune session disponible"}
+              {!sessions ? "Erreur de chargement" : "Aucune session disponible"}
             </Text>
             <Text style={styles.sessionProperty}>
               {!sessions
@@ -890,7 +1034,8 @@ export default function MaintenanceScreen(): JSX.Element {
                 agent.rating?.toString() || "Non noté";
               const completedJobs: string =
                 agent.completedTasks?.toString() || "0";
-              const agentSpecialties: string[] = agent.specialties?.map(s => s.name) || [];
+              const agentSpecialties: string[] =
+                agent.specialties?.map((s: string) => s) || [];
 
               return (
                 <View key={agent.id} style={styles.agentCard}>
@@ -1259,6 +1404,304 @@ export default function MaintenanceScreen(): JSX.Element {
                 onPress={handleCreateSession}
               >
                 <Text style={styles.modalConfirmText}>Créer la session</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de création de ticket */}
+      <Modal
+        visible={showCreateTicketModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCreateTicketModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Créer un ticket</Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setShowCreateTicketModal(false)}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollView}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Titre *:</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={ticketTitle}
+                  onChangeText={setTicketTitle}
+                  placeholder="Titre du ticket"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Description *:</Text>
+                <TextInput
+                  style={[styles.textInput, styles.textArea]}
+                  value={ticketDescription}
+                  onChangeText={setTicketDescription}
+                  multiline
+                  numberOfLines={4}
+                  placeholder="Description détaillée du problème"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Priorité:</Text>
+                <View style={styles.priorityOptions}>
+                  {["low", "medium", "high", "urgent"].map((priority) => (
+                    <TouchableOpacity
+                      key={priority}
+                      style={[
+                        styles.priorityOption,
+                        ticketPriority === priority && styles.selectedPriorityOption,
+                      ]}
+                      onPress={() => setTicketPriority(priority)}
+                    >
+                      <Text
+                        style={[
+                          styles.priorityOptionText,
+                          ticketPriority === priority && styles.selectedPriorityText,
+                        ]}
+                      >
+                        {priority === "low" ? "Faible" : 
+                         priority === "medium" ? "Moyenne" :
+                         priority === "high" ? "Haute" : "Urgente"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Catégorie:</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={ticketCategory}
+                  onChangeText={setTicketCategory}
+                  placeholder="Ex: plomberie, électricité, chauffage"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Propriété *:</Text>
+                <View style={styles.propertySelection}>
+                  {properties.map((property) => (
+                    <TouchableOpacity
+                      key={property.id}
+                      style={[
+                        styles.propertySelectionCard,
+                        ticketProperty === property.id && styles.selectedPropertyCard,
+                      ]}
+                      onPress={() => setTicketProperty(property.id)}
+                    >
+                      <View style={styles.propertySelectionInfo}>
+                        <Text style={styles.propertySelectionName}>
+                          {property.name}
+                        </Text>
+                        <Text style={styles.propertySelectionAddress}>
+                          {property.address}, {property.city}
+                        </Text>
+                        <View style={styles.propertySelectionStatus}>
+                          <View style={[
+                            styles.statusIndicator,
+                            { backgroundColor: 
+                              property.status === 'available' ? '#34C759' :
+                              property.status === 'occupied' ? '#FF9500' :
+                              property.status === 'maintenance' ? '#FF3B30' : '#8E8E93'
+                            }
+                          ]} />
+                          <Text style={styles.propertyStatusText}>
+                            {property.status === 'available' ? 'Disponible' :
+                             property.status === 'occupied' ? 'Occupée' :
+                             property.status === 'maintenance' ? 'Maintenance' : 'Hors ligne'}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Localisation:</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={ticketRoomLocation}
+                  onChangeText={setTicketRoomLocation}
+                  placeholder="Ex: cuisine, salle de bain, salon"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Coût estimé (€):</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={ticketEstimatedCost}
+                  onChangeText={setTicketEstimatedCost}
+                  keyboardType="numeric"
+                  placeholder="0"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Durée estimée (minutes):</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={ticketEstimatedDuration}
+                  onChangeText={setTicketEstimatedDuration}
+                  keyboardType="numeric"
+                  placeholder="60"
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowCreateTicketModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmButton}
+                onPress={handleCreateTicket}
+              >
+                <Text style={styles.modalConfirmText}>Créer le ticket</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de planification de session */}
+      <Modal
+        visible={showPlanSessionModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowPlanSessionModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Planifier une session</Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setShowPlanSessionModal(false)}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollView}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Ticket *:</Text>
+                <View style={styles.ticketSelection}>
+                  {tickets
+                    .filter(ticket => ticket.status === "open" || ticket.status === "assigned")
+                    .map((ticket) => (
+                    <TouchableOpacity
+                      key={ticket.id}
+                      style={[
+                        styles.ticketSelectionCard,
+                        sessionTicketId === ticket.id && styles.selectedTicketCard,
+                      ]}
+                      onPress={() => setSessionTicketId(ticket.id)}
+                    >
+                      <Text style={styles.ticketSelectionTitle}>{ticket.title}</Text>
+                      <Text style={styles.ticketSelectionProperty}>
+                        {ticket.property?.name || "Propriété"}
+                      </Text>
+                      <View style={styles.ticketSelectionPriority}>
+                        <Text style={styles.priorityText}>
+                          {getPriorityConfig(ticket.priority).icon} {ticket.priority}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Agent *:</Text>
+                <View style={styles.agentSelection}>
+                  {agents
+                    .filter(agent => agent.availability === "available")
+                    .map((agent) => (
+                    <TouchableOpacity
+                      key={agent.id}
+                      style={[
+                        styles.agentSelectionCard,
+                        sessionAgentId === agent.id && styles.selectedAgentCard,
+                      ]}
+                      onPress={() => setSessionAgentId(agent.id)}
+                    >
+                      <Text style={styles.agentSelectionName}>
+                        {agent.user?.name}
+                      </Text>
+                      <Text style={styles.agentSelectionDescription}>
+                        Agent de maintenance
+                      </Text>
+                      <Text style={styles.agentSelectionRating}>
+                        ⭐ {agent.rating || "N/A"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Date et heure prévues *:</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={sessionScheduledDate}
+                  onChangeText={setSessionScheduledDate}
+                  placeholder="YYYY-MM-DD HH:MM"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Durée estimée (minutes):</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={sessionEstimatedDuration}
+                  onChangeText={setSessionEstimatedDuration}
+                  keyboardType="numeric"
+                  placeholder="60"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Description du travail:</Text>
+                <TextInput
+                  style={[styles.textInput, styles.textArea]}
+                  value={sessionWorkDescription}
+                  onChangeText={setSessionWorkDescription}
+                  multiline
+                  numberOfLines={4}
+                  placeholder="Description détaillée du travail à effectuer"
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowPlanSessionModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmButton}
+                onPress={handlePlanSession}
+              >
+                <Text style={styles.modalConfirmText}>Planifier</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2002,6 +2445,111 @@ const styles = StyleSheet.create({
   textArea: {
     height: 100,
     textAlignVertical: "top",
+  },
+  modalScrollView: {
+    maxHeight: 400,
+  },
+  priorityOptions: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  priorityOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: "#F2F2F7",
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  selectedPriorityOption: {
+    backgroundColor: "#E3F2FD",
+    borderColor: "#007AFF",
+  },
+  priorityOptionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#8E8E93",
+  },
+  selectedPriorityText: {
+    color: "#007AFF",
+  },
+  ticketSelection: {
+    gap: 8,
+    maxHeight: 200,
+  },
+  ticketSelectionCard: {
+    padding: 12,
+    backgroundColor: "#F8F9FA",
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  selectedTicketCard: {
+    borderColor: "#007AFF",
+    backgroundColor: "#E3F2FD",
+  },
+  ticketSelectionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1C1C1E",
+    marginBottom: 4,
+  },
+  ticketSelectionProperty: {
+    fontSize: 12,
+    color: "#007AFF",
+    marginBottom: 4,
+  },
+  ticketSelectionPriority: {
+    alignSelf: "flex-start",
+  },
+  priorityText: {
+    fontSize: 12,
+    color: "#8E8E93",
+  },
+  propertySelection: {
+    gap: 8,
+    maxHeight: 200,
+  },
+  propertySelectionCard: {
+    padding: 12,
+    backgroundColor: "#F8F9FA",
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  selectedPropertyCard: {
+    borderColor: "#007AFF",
+    backgroundColor: "#E3F2FD",
+  },
+  propertySelectionInfo: {
+    flex: 1,
+  },
+  propertySelectionName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1C1C1E",
+    marginBottom: 4,
+  },
+  propertySelectionAddress: {
+    fontSize: 12,
+    color: "#8E8E93",
+    marginBottom: 6,
+  },
+  propertySelectionStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  statusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  propertyStatusText: {
+    fontSize: 11,
+    color: "#8E8E93",
+    fontWeight: "600",
   },
   // Styles pour les états de loading et d'erreur
   loadingContainer: {

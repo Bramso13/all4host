@@ -9,11 +9,14 @@ import {
   StyleSheet,
   Modal,
   TextInput,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useConciergerie } from "~/context";
-import { useProperties } from "~/context/PropertyContext";
+
+import { useConciergerie } from "~/context/ConciergerieContext";
 import { useAgents } from "~/context/AgentContext";
+import { useProperties } from "~/context/PropertyContext";
+
 import InformationsGenerales from "~/components/pages/conciergerie/pages/InformationsGenerales";
 import GestionPersonnel from "~/components/pages/conciergerie/pages/GestionPersonnel";
 import ServicesConciergerie from "~/components/pages/conciergerie/pages/ServicesConciergerie";
@@ -54,16 +57,19 @@ const Page = ({
   content,
   color,
   children,
+  refreshControl,
 }: {
   title: string;
   content: string;
   color: string;
   children?: React.ReactNode;
+  refreshControl?: React.ReactElement;
 }) => (
   <View style={[styles.page, { backgroundColor: color }]}>
     <ScrollView
       style={styles.pageScrollView}
       showsVerticalScrollIndicator={false}
+      refreshControl={refreshControl}
     >
       <View style={styles.pageContent}>
         <Text style={styles.pageTitle}>{title}</Text>
@@ -84,11 +90,14 @@ export default function ConciergerieScreen() {
     setSelectedProperty,
     reservations,
     propertyOwners,
+    managers,
     isLoading,
     error,
     fetchProperties,
     fetchReservations,
     fetchPropertyOwners,
+    fetchManager,
+    fetchManagers,
     createProperty,
     updateProperty,
     deleteProperty,
@@ -117,6 +126,24 @@ export default function ConciergerieScreen() {
     notes: "",
   });
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        fetchProperties(),
+        fetchReservations(),
+        fetchPropertyOwners(),
+        fetchManager(),
+        fetchManagers(),
+      ]);
+    } catch (error) {
+      console.error("Erreur lors du refresh:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Calcul des statistiques à partir des données du contexte
   const today = new Date();
@@ -263,6 +290,16 @@ export default function ConciergerieScreen() {
             title={pages[0].title}
             content={pages[0].content}
             color={pages[0].color}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#007AFF"
+                colors={["#007AFF"]}
+                title="Actualisation..."
+                titleColor="#007AFF"
+              />
+            }
           >
             <InformationsGenerales />
           </Page>
@@ -272,14 +309,18 @@ export default function ConciergerieScreen() {
             title={pages[1].title}
             content={pages[1].content}
             color={pages[1].color}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#007AFF"
+                colors={["#007AFF"]}
+                title="Actualisation..."
+                titleColor="#007AFF"
+              />
+            }
           >
-            <GestionPersonnel
-              agents={agents}
-              getAgentsStats={getAgentsStats}
-              setSelectedAgent={setSelectedAgent}
-              setShowCreateAgentModal={setShowCreateAgentModal}
-              setShowAgentDetailsModal={setShowAgentDetailsModal}
-            />
+            <GestionPersonnel />
           </Page>
 
           {/* Page Services Conciergerie */}
@@ -287,6 +328,16 @@ export default function ConciergerieScreen() {
             title={pages[2].title}
             content={pages[2].content}
             color={pages[2].color}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#007AFF"
+                colors={["#007AFF"]}
+                title="Actualisation..."
+                titleColor="#007AFF"
+              />
+            }
           >
             <ServicesConciergerie />
           </Page>
@@ -342,7 +393,6 @@ const styles = StyleSheet.create({
   page: {
     width: screenWidth,
     flex: 1,
-    paddingTop: 60,
   },
   pageScrollView: {
     flex: 1,

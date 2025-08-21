@@ -2,43 +2,8 @@
 // CONTEXTS INDEX - TOUS LES PÔLES ALIGNÉS SCHEMA.PRISMA
 // ============================================================================
 
-// 🧹 PÔLE NETTOYAGE (CLEANING)
-export {
-  NettoyageProvider,
-  useNettoyage,
-  CleaningProvider, // Alias
-  useCleaning, // Alias
-
-  // Types Nettoyage
-  type Property as CleaningProperty,
-  type AgentProfile as CleaningAgent,
-  type CleaningSession,
-  type CleaningChecklist,
-  type CleaningPhoto,
-  type PoleManagerProfile as CleaningPoleManager,
-  type SessionStatus,
-  type AgentType,
-  type AgentAvailability,
-  type PropertyStatus,
-} from "./NettoyageContext";
-
 // 🔧 PÔLE MAINTENANCE
-export {
-  MaintenanceProvider,
-  useMaintenance,
-
-  // Types Maintenance
-  type Property as MaintenanceProperty,
-  type AgentProfile as MaintenanceAgent,
-  type Ticket,
-  type TicketPhoto,
-  type MaintenanceSession,
-  type MaintenanceMaterial,
-  type MaintenancePhoto,
-  type PoleManagerProfile as MaintenancePoleManager,
-  type TicketStatus,
-  type TicketPriority,
-} from "./MaintenanceContext";
+export { MaintenanceProvider, useMaintenance } from "./MaintenanceContext";
 
 // 🧺 PÔLE BLANCHISSERIE (LAUNDRY)
 export {
@@ -57,44 +22,23 @@ export {
 } from "./BlanchisserieContext";
 
 // 🏢 PÔLE CONCIERGERIE
-export {
-  ConciergerieProvider,
-  useConciergerie,
+export { ConciergerieProvider, useConciergerie } from "./ConciergerieContext";
 
-  // Types Conciergerie
-  type Property as ConciergerieProperty,
-  type Reservation,
-  type PropertyOwnerProfile,
-  type PropertyFeature,
-  type PropertyPhoto,
-  type PropertyReview,
-  type PropertyContract,
-  type PoleManagerProfile as ConciergeriePoleManager,
-  type ReservationStatus,
-} from "./ConciergerieContext";
+// 🏠 PROPRIÉTAIRES DE BIENS
+export {
+  PropertyOwnerProvider,
+  usePropertyOwner,
+  usePropertyOwnerProfile,
+  usePropertyOwnerProperties,
+  usePropertyOwnerDashboard,
+
+  // Types PropertyOwner
+  type UpdatePropertyOwnerProfileData,
+} from "./PropertyOwnerContext";
 
 // ============================================================================
 // TYPES COMMUNS À TOUS LES PÔLES
 // ============================================================================
-
-// Type général PoleManagerProfile (peut être utilisé pour tous les pôles)
-export type { PoleManagerProfile, PoleType } from "./NettoyageContext";
-
-// Union types pour plus de flexibilité
-export type AnyProperty =
-  | import("./NettoyageContext").Property
-  | import("./MaintenanceContext").Property
-  | import("./ConciergerieContext").Property;
-
-export type AnyAgent =
-  | import("./NettoyageContext").AgentProfile
-  | import("./MaintenanceContext").AgentProfile;
-
-export type AnyPoleManager =
-  | import("./NettoyageContext").PoleManagerProfile
-  | import("./MaintenanceContext").PoleManagerProfile
-  | import("./BlanchisserieContext").PoleManagerProfile
-  | import("./ConciergerieContext").PoleManagerProfile;
 
 // ============================================================================
 // RÉSUMÉ DE L'ARCHITECTURE

@@ -20,20 +20,72 @@ export async function GET(request: Request) {
       datasourceUrl: process.env.DATABASE_URL,
     }).$extends(withAccelerate());
 
-    const agents = await prisma.agent.findMany({
+    const agents = await prisma.agentProfile.findMany({
       where: {
-        conciergerieManager: {
+        manager: {
           userId: session.user.id,
         },
       },
       include: {
-        user: true,
-        conciergerieManager: true,
-        maintenanceSessions: true,
-        cleaningSessions: true,
-        tasks: true,
-        tickets: true,
-        cleaningPlannings: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            avatar: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        manager: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+        specialties: true,
+        cleaningSessions: {
+          include: {
+            property: {
+              select: {
+                id: true,
+                name: true,
+                address: true,
+              },
+            },
+          },
+        },
+        maintenanceSessions: {
+          include: {
+            property: {
+              select: {
+                id: true,
+                name: true,
+                address: true,
+              },
+            },
+          },
+        },
+        tickets: {
+          include: {
+            property: {
+              select: {
+                id: true,
+                name: true,
+                address: true,
+              },
+            },
+          },
+        },
+        taskAssignments: true,
       },
     });
 
@@ -64,25 +116,29 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, description, userId, type, email } = body;
+    const { name, email, agentType } = body;
+
+    if (!name || !email) {
+      return new Response(JSON.stringify({ error: "Données manquantes" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
     const prisma = new PrismaClient({
       datasourceUrl: process.env.DATABASE_URL,
     }).$extends(withAccelerate());
 
-    // Trouver le conciergerie manager de l'utilisateur
-    const conciergerieManager = await prisma.conciergerieManager.findFirst({
+    // Trouver le manager de l'utilisateur connecté
+    const manager = await prisma.poleManagerProfile.findFirst({
       where: { userId: session.user.id },
     });
 
-    if (!conciergerieManager) {
-      return new Response(
-        JSON.stringify({ error: "Manager de conciergerie non trouvé" }),
-        {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+    if (!manager) {
+      return new Response(JSON.stringify({ error: "Manager non trouvé" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const user = await auth.api.signUpEmail({
@@ -105,38 +161,55 @@ export async function POST(request: Request) {
       );
     }
 
-    const agent = await prisma.agent.create({
+    const agentProfile = await prisma.agentProfile.create({
       data: {
-        name,
-        description,
         userId: user.user.id,
-        conciergerieManagerId: conciergerieManager.id,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        type,
+        agentType: agentType,
+        availability: "offline",
+        completedTasks: 0,
+        isActive: true,
+        hireDate: new Date(),
+        managerId: manager.id,
+        certifications: [],
+        serviceZones: [],
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            avatar: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        manager: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+        specialties: true,
       },
     });
-
-    if (!agent) {
-      return new Response(JSON.stringify(agent), {
-        status: 201,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
 
     await prisma.user.update({
       where: { id: user.user.id },
       data: {
-        agent: {
-          connect: {
-            id: agent.id,
-          },
-        },
         role: "agent",
       },
     });
 
-    return new Response(JSON.stringify(agent), {
+    return new Response(JSON.stringify(agentProfile), {
       status: 201,
       headers: { "Content-Type": "application/json" },
     });
@@ -170,10 +243,10 @@ export async function PUT(request: Request) {
     }).$extends(withAccelerate());
 
     // Vérifier que l'agent appartient au manager connecté
-    const existingAgent = await prisma.agent.findFirst({
+    const existingAgent = await prisma.agentProfile.findFirst({
       where: {
         id: id,
-        conciergerieManager: {
+        manager: {
           userId: session.user.id,
         },
       },
@@ -186,12 +259,35 @@ export async function PUT(request: Request) {
       });
     }
 
-    const agent = await prisma.agent.update({
+    const agent = await prisma.agentProfile.update({
       where: { id: id },
-      data: {
-        name,
-        description,
-        userId,
+      data: body,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            avatar: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        manager: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+        specialties: true,
       },
     });
 
@@ -229,12 +325,15 @@ export async function DELETE(request: Request) {
     }).$extends(withAccelerate());
 
     // Vérifier que l'agent appartient au manager connecté
-    const existingAgent = await prisma.agent.findFirst({
+    const existingAgent = await prisma.agentProfile.findFirst({
       where: {
         id: id,
-        conciergerieManager: {
+        manager: {
           userId: session.user.id,
         },
+      },
+      include: {
+        user: true,
       },
     });
 
@@ -246,9 +345,19 @@ export async function DELETE(request: Request) {
     }
 
     // Supprimer l'agent (les relations seront supprimées automatiquement grâce à onDelete: Cascade)
-    await prisma.agent.delete({
+    await prisma.agentProfile.delete({
       where: { id: id },
     });
+
+    // Réinitialiser le rôle de l'utilisateur
+    if (existingAgent.user) {
+      await prisma.user.update({
+        where: { id: existingAgent.user.id },
+        data: {
+          role: "property_owner",
+        },
+      });
+    }
 
     return new Response(
       JSON.stringify({ message: "Agent supprimé avec succès" }),

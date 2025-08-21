@@ -16,6 +16,7 @@ import { PortalHost } from "@rn-primitives/portal";
 import { ThemeToggle } from "~/components/ThemeToggle";
 import { setAndroidNavigationBar } from "~/lib/android-navigation-bar";
 import { supabase } from "~/lib/supabase";
+import { AccountSwitcherProvider } from "~/context/AccountSwitcherContext";
 
 const LIGHT_THEME: Theme = {
   ...DefaultTheme,
@@ -42,20 +43,22 @@ export default function RootLayout() {
   const { isDarkColorScheme } = useColorScheme();
 
   return (
-    <ThemeProvider value={isDarkColorScheme ? DARK_THEME : LIGHT_THEME}>
-      <StatusBar style={isDarkColorScheme ? "light" : "dark"} />
+    <AccountSwitcherProvider>
+      <ThemeProvider value={isDarkColorScheme ? DARK_THEME : LIGHT_THEME}>
+        <StatusBar style={isDarkColorScheme ? "light" : "dark"} />
 
-      <Stack>
-        <Stack.Screen
-          name="(tabs)"
-          options={{ headerShown: false, headerRight: () => <ThemeToggle /> }}
-        />
+        <Stack>
+          <Stack.Screen
+            name="(tabs)"
+            options={{ headerShown: false, headerRight: () => <ThemeToggle /> }}
+          />
 
-        <Stack.Screen name="+not-found" />
-      </Stack>
+          <Stack.Screen name="+not-found" />
+        </Stack>
 
-      <PortalHost />
-    </ThemeProvider>
+        <PortalHost />
+      </ThemeProvider>
+    </AccountSwitcherProvider>
   );
 }
 

@@ -378,7 +378,6 @@ const styles = StyleSheet.create({
   },
   page: {
     flex: 1,
-    paddingTop: 60,
   },
   pageContent: {
     paddingHorizontal: 20,
